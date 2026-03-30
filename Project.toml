@@ -1,0 +1,11 @@
+name = "flopsy"
+uuid = "1dba178f-ad43-479e-9eb8-d59b35e847b9"
+version = "0.1.0"
+
+[deps]
+DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
+Sundials = "c3572dad-4567-51f8-b174-8c6c989267f4"
+HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+DataFrames = "a93c6f00-e57a-5684-b7b6-d8193f3e46c0"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
