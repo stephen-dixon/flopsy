@@ -1,0 +1,36 @@
+Flopsy.jl
+types.jl
+variables.jl
+state.jl
+mesh.jl
+
+operators/
+    operators.jl
+    reaction.jl
+    diffusion.jl
+    constraints.jl
+    composition.jl
+
+formulations/
+    formulations.jl
+    unsplit.jl
+    imex.jl
+    split.jl
+    residual.jl
+
+solvers/
+    solvers.jl
+    sciML_problem_builders.jl
+    time_integrators.jl
+
+models/
+    models.jl
+    generic_rd_model.jl
+    trapping_model.jl
+
+adapters/
+    hotgates.jl
+
+config.jl
+runner.jl
+output.jl

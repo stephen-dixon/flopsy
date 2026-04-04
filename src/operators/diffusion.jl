@@ -1,4 +1,4 @@
-struct LinearDiffusionOperator{T, S, B} <: AbstractDiffusionOperator
+struct LinearDiffusionOperator{T,S,B} <: AbstractDiffusionOperator
     coefficients::Vector{T}
     selector::S
     bc::B
@@ -7,7 +7,7 @@ end
 supports_rhs(::LinearDiffusionOperator) = true
 
 function rhs!(du, op::LinearDiffusionOperator, u, ctx::SystemContext, t)
-    layout = ctx.aux[:layout]
+    layout = ctx.layout
     nx = ctx.nx
 
     U = state_view(u, layout, nx)
@@ -21,11 +21,12 @@ function rhs!(du, op::LinearDiffusionOperator, u, ctx::SystemContext, t)
     @inbounds for ivar in vars
         D = op.coefficients[ivar]
 
-        # simple zero-flux-ish second derivative with replicated boundary values
         dU[ivar, 1] += D * (U[ivar, 2] - U[ivar, 1]) * invdx2
+
         for ix in 2:(nx - 1)
             dU[ivar, ix] += D * (U[ivar, ix + 1] - 2U[ivar, ix] + U[ivar, ix - 1]) * invdx2
         end
+
         dU[ivar, nx] += D * (U[ivar, nx - 1] - U[ivar, nx]) * invdx2
     end
 

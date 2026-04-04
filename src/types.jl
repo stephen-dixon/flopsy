@@ -12,14 +12,22 @@ struct Mesh1D{T}
     dx::T
 end
 
-struct SystemContext{T, M, A}
+struct RunInfo
+    run_id::String
+    start_time::DateTime
+    config_path::Union{Nothing,String}
+    package_versions::Dict{String,String}
+end
+
+struct SystemContext{L,M,A,S}
+    layout::L
     nx::Int
     mesh::M
     aux::A
-    scratch::Dict{Symbol, Any}
+    scratch::S
 end
 
-struct SystemModel{L, O, C} <: AbstractSystemModel
+struct SystemModel{L,O,C} <: AbstractSystemModel
     layout::L
     operators::O
     context::C
@@ -32,5 +40,8 @@ Base.@kwdef struct SolverConfig
     reltol::Float64 = 1e-6
     saveat = nothing
     dt = nothing
-    kwargs::Dict{Symbol, Any} = Dict{Symbol, Any}()
+    show_progress::Bool = true
+    show_solver_stats::Bool = true
+    write_convergence_trace::Bool = false
+    kwargs::Dict{Symbol,Any} = Dict{Symbol,Any}()
 end

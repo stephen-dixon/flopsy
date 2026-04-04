@@ -7,5 +7,5 @@ variable_view(U::AbstractMatrix, ivar::Integer) = @view U[ivar, :]
 
 function group_view(U::AbstractMatrix, layout::VariableLayout, group::Symbol)
     r = layout.group_ranges[group]
-    @view U[r, :]
+    return @view U[r, :]
 end

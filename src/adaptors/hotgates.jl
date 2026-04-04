@@ -1,4 +1,4 @@
-struct HotgatesReactionOperator{M, A} <: AbstractReactionOperator
+struct HotgatesReactionOperator{M,A} <: AbstractReactionOperator
     model::M
     adaptor::A
 end
@@ -6,20 +6,14 @@ end
 supports_rhs(::HotgatesReactionOperator) = true
 
 """
-    rhs!(du, op::HotgatesReactionOperator, u, ctx, t)
-
-Node-local reaction contribution hook for a Hotgates-backed model.
-
-`op.adaptor` is expected to provide:
+Expected adaptor interface:
 
     local_rhs!(du_local, u_local, model, ctx, t, ix)
 
-where:
-- `u_local` is a view of all state variables at node `ix`
-- `du_local` is the corresponding output view
+where `u_local` and `du_local` are views over all variables at node `ix`.
 """
 function rhs!(du, op::HotgatesReactionOperator, u, ctx::SystemContext, t)
-    layout = ctx.aux[:layout]
+    layout = ctx.layout
     nx = ctx.nx
 
     U = state_view(u, layout, nx)

@@ -1,47 +1,93 @@
-using OrdinaryDiffEq
-
 function run_simulation(config_path::AbstractString)
     cfg = load_config(config_path)
 
-    # Minimal starter runner using a toy generic reaction-diffusion model.
+    model_type = get(cfg, "model_type", "toy_rd")
+
     length_domain = get(cfg, "length", 1.0)
-    nx = get(cfg, "nx", 100)
-    tspan = Tuple(get(cfg, "tspan", [0.0, 1.0]))
+    nx = get(cfg, "nx", 101)
+    tspan_vec = get(cfg, "tspan", [0.0, 1.0])
+    tspan = (tspan_vec[1], tspan_vec[2])
 
     mesh = Mesh1D(length_domain, nx)
 
-    vars = [
-        VariableInfo(:u, :state, Set([:reaction, :diffusion])),
-    ]
-    layout = VariableLayout(vars)
+    model = if model_type == "toy_rd"
+        build_toy_rd_model(cfg, mesh)
+    elseif model_type == "toy_trapping"
+        build_toy_trapping_model(cfg, mesh)
+    else
+        throw(ArgumentError("Unknown model_type: $model_type"))
+    end
 
-    reaction = nothing
-
-    diffusion_coeffs = [get(cfg, "diffusion_coefficient", 1.0)]
-    selector(layout) = variables_with_tag(layout, :diffusion)
-    diffusion = LinearDiffusionOperator(diffusion_coeffs, selector, nothing)
-
-    model = build_rd_model(
-        layout=layout,
-        mesh=mesh,
-        reaction=reaction,
-        diffusion=diffusion,
-    )
-
-    n = nvariables(layout) * nx
-    u0 = zeros(n)
-
-    # Simple initial pulse
-    U0 = state_view(u0, layout, nx)
-    mid = cld(nx, 2)
-    U0[1, mid] = 1.0
+    u0 = build_initial_state(cfg, model)
 
     solver_config = SolverConfig(
-        formulation=UnsplitFormulation(),
-        algorithm=Rodas5(),
-        abstol=1e-8,
-        reltol=1e-6,
+        formulation = UnsplitFormulation(),
+        algorithm = Rodas5(),
+        abstol = get(cfg, "abstol", 1e-8),
+        reltol = get(cfg, "reltol", 1e-6),
+        saveat = get(cfg, "saveat", nothing),
     )
 
     return solve_problem(model, u0, tspan, solver_config)
+end
+
+
+function build_toy_rd_model(cfg, mesh::Mesh1D)
+    diffusion_coefficient = get(cfg, "diffusion_coefficient", 0.1)
+    reaction_rate = get(cfg, "reaction_rate", 1.0)
+
+    variables = [
+        VariableInfo(:u, :state, Set([:reaction, :diffusion])),
+    ]
+    layout = VariableLayout(variables)
+
+    reaction = ToyReactionOperator(reaction_rate)
+
+    selector(layout::VariableLayout) = variables_with_tag(layout, :diffusion)
+    diffusion = LinearDiffusionOperator([diffusion_coefficient], selector, nothing)
+
+    return build_rd_model(
+        layout = layout,
+        mesh = mesh,
+        reaction = reaction,
+        diffusion = diffusion,
+    )
+end
+
+
+function build_toy_trapping_model(cfg, mesh::Mesh1D)
+    k_trap = get(cfg, "k_trap", 5.0)
+    k_detrap = get(cfg, "k_detrap", 0.5)
+    diffusion_coefficient = get(cfg, "diffusion_coefficient", 0.01)
+
+    return build_trapping_model(
+        mesh = mesh,
+        k_trap = k_trap,
+        k_detrap = k_detrap,
+        diffusion_coefficient = diffusion_coefficient,
+        mobile_name = :c,
+        trap_name = :theta,
+    )
+end
+
+
+function build_initial_state(cfg, model::SystemModel)
+    layout = model.layout
+    nx = model.context.nx
+
+    u0 = zeros(nvariables(layout) * nx)
+    U0 = state_view(u0, layout, nx)
+
+    if nvariables(layout) == 1
+        mid = cld(nx, 2)
+        U0[1, mid] = get(cfg, "initial_pulse_amplitude", 1.0)
+    elseif nvariables(layout) == 2
+        mid = cld(nx, 2)
+        U0[1, mid] = get(cfg, "initial_mobile_pulse_amplitude", 1.0)
+        U0[2, :] .= get(cfg, "initial_trap_occupancy", 0.0)
+    else
+        throw(ArgumentError("No default initial-state builder for $(nvariables(layout)) variables"))
+    end
+
+    return u0
 end

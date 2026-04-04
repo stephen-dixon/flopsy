@@ -1,0 +1,16 @@
+model_type = "toy_trapping"
+
+length = 1.0
+nx = 101
+tspan = [0.0, 1.0]
+
+k_trap = 5.0
+k_detrap = 0.5
+diffusion_coefficient = 0.01
+
+initial_mobile_pulse_amplitude = 1.0
+initial_trap_occupancy = 0.0
+
+saveat = 0.02
+abstol = 1e-8
+reltol = 1e-6

@@ -1,6 +1,14 @@
 module Flopsy
 
 using LinearAlgebra
+using TOML
+using SciMLBase
+using OrdinaryDiffEq
+using HDF5
+using CSV
+using DataFrames
+using Printf
+using Dates
 
 include("types.jl")
 include("variables.jl")
@@ -30,17 +38,19 @@ include("models/trapping_model.jl")
 
 include("adapters/hotgates.jl")
 
+include("progress.jl")
 include("runner.jl")
 include("output.jl")
 
 export
-    # core types
+export
     AbstractSystemModel,
     AbstractOperator,
     AbstractReactionOperator,
     AbstractDiffusionOperator,
     AbstractConstraintOperator,
     AbstractFormulation,
+
     VariableInfo,
     VariableLayout,
     Mesh1D,
@@ -48,18 +58,17 @@ export
     SystemModel,
     SolverConfig,
 
-    # layout/state helpers
     nvariables,
     variable_names,
     variables_in_group,
     variables_with_tag,
     has_group,
+
     state_view,
     node_view,
     variable_view,
     group_view,
 
-    # operator capability hooks
     supports_rhs,
     supports_implicit_rhs,
     supports_step,
@@ -67,7 +76,6 @@ export
     supports_mass_matrix,
     supports_jacobian,
 
-    # operator API
     rhs!,
     implicit_rhs!,
     step!,
@@ -75,16 +83,15 @@ export
     jacobian!,
     mass_matrix,
 
-    # operator utilities
     NullOperator,
     OperatorSum,
     active_operators,
 
-    # concrete starter operators
     LinearDiffusionOperator,
+    ToyReactionOperator,
+    SimpleTrappingReactionOperator,
     ConstraintOperator,
 
-    # formulations
     UnsplitFormulation,
     IMEXFormulation,
     LieSplit,
@@ -92,19 +99,15 @@ export
     SplitFormulation,
     ResidualFormulation,
 
-    # model builders
     build_rd_model,
     build_trapping_model,
+    trapping_variable_layout,
 
-    # problem / solver
     build_problem,
     solve_problem,
 
-    # config / runner
     load_config,
     run_simulation,
 
-    # adaptor-facing helper
     HotgatesReactionOperator
-
 end

@@ -3,9 +3,25 @@ uuid = "1dba178f-ad43-479e-9eb8-d59b35e847b9"
 version = "0.1.0"
 
 [deps]
-DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
-Sundials = "c3572dad-4567-51f8-b174-8c6c989267f4"
+# numerical packages
+# DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
+OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283c2f0a"
+SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
+# Sundials = "c3572dad-4567-51f8-b174-8c6c989267f4"
+
+# IO
 HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 DataFrames = "a93c6f00-e57a-5684-b7b6-d8193f3e46c0"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+
+# misc
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+
+[compat]
+OrdinaryDiffEq = "6"
+SciMLBase = "2"
+julia = "1.10"

@@ -6,7 +6,7 @@ end
 
 struct VariableLayout
     variables::Vector{VariableInfo}
-    group_ranges::Dict{Symbol, UnitRange{Int}}
+    group_ranges::Dict{Symbol,UnitRange{Int}}
 end
 
 nvariables(layout::VariableLayout) = length(layout.variables)
@@ -17,8 +17,7 @@ has_group(layout::VariableLayout, group::Symbol) = haskey(layout.group_ranges, g
 
 function variables_in_group(layout::VariableLayout, group::Symbol)
     has_group(layout, group) || return Int[]
-    r = layout.group_ranges[group]
-    return collect(r)
+    return collect(layout.group_ranges[group])
 end
 
 function variables_with_tag(layout::VariableLayout, tag::Symbol)
@@ -30,7 +29,7 @@ function variables_with_tag(layout::VariableLayout, tag::Symbol)
 end
 
 function VariableLayout(variables::Vector{VariableInfo})
-    group_ranges = Dict{Symbol, UnitRange{Int}}()
+    group_ranges = Dict{Symbol,UnitRange{Int}}()
 
     if isempty(variables)
         return VariableLayout(variables, group_ranges)
@@ -48,5 +47,6 @@ function VariableLayout(variables::Vector{VariableInfo})
     end
 
     group_ranges[current_group] = start_idx:length(variables)
+
     return VariableLayout(variables, group_ranges)
 end
