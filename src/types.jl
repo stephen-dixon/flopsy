@@ -1,16 +1,36 @@
-module Types
+abstract type AbstractSystemModel end
 
-export SpeciesInfo, SimulationContext
+abstract type AbstractOperator end
+abstract type AbstractReactionOperator <: AbstractOperator end
+abstract type AbstractDiffusionOperator <: AbstractOperator end
+abstract type AbstractConstraintOperator <: AbstractOperator end
 
-struct SpeciesInfo
-    names::Vector{String}
-    nlevels::Int
+abstract type AbstractFormulation end
+
+struct Mesh1D{T}
+    x::Vector{T}
+    dx::T
 end
 
-struct SimulationContext
-    species::SpeciesInfo
+struct SystemContext{T, M, A}
     nx::Int
-    dx::Float64
+    mesh::M
+    aux::A
+    scratch::Dict{Symbol, Any}
 end
 
+struct SystemModel{L, O, C} <: AbstractSystemModel
+    layout::L
+    operators::O
+    context::C
+end
+
+Base.@kwdef struct SolverConfig
+    formulation::AbstractFormulation
+    algorithm
+    abstol::Float64 = 1e-8
+    reltol::Float64 = 1e-6
+    saveat = nothing
+    dt = nothing
+    kwargs::Dict{Symbol, Any} = Dict{Symbol, Any}()
 end

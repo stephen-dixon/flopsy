@@ -1,29 +1,47 @@
-module Runner
+using OrdinaryDiffEq
 
-using ..Config
-using ..Mesh
-using ..Types
-using ..State
-using ..Solver
-using ..Output
+function run_simulation(config_path::AbstractString)
+    cfg = load_config(config_path)
 
-export run_simulation
+    # Minimal starter runner using a toy generic reaction-diffusion model.
+    length_domain = get(cfg, "length", 1.0)
+    nx = get(cfg, "nx", 100)
+    tspan = Tuple(get(cfg, "tspan", [0.0, 1.0]))
 
-function run_simulation(config_path::String)
-    config = Config.load_config(config_path)
+    mesh = Mesh1D(length_domain, nx)
 
-    x, dx = Mesh.create_mesh(config.nx, config.length)
+    vars = [
+        VariableInfo(:u, :state, Set([:reaction, :diffusion])),
+    ]
+    layout = VariableLayout(vars)
 
-    species = Types.SpeciesInfo(["mobile"], 1)
-    ctx = Types.SimulationContext(species, config.nx, dx)
+    reaction = nothing
 
-    u0 = State.create_initial_state(length(species.names), species.nlevels, config.nx)
+    diffusion_coeffs = [get(cfg, "diffusion_coefficient", 1.0)]
+    selector(layout) = variables_with_tag(layout, :diffusion)
+    diffusion = LinearDiffusionOperator(diffusion_coeffs, selector, nothing)
 
-    sol = Solver.solve_problem(u0, config.tspan, ctx, config)
+    model = build_rd_model(
+        layout=layout,
+        mesh=mesh,
+        reaction=reaction,
+        diffusion=diffusion,
+    )
 
-    Output.write_outputs(sol, ctx, config)
+    n = nvariables(layout) * nx
+    u0 = zeros(n)
 
-    return sol
-end
+    # Simple initial pulse
+    U0 = state_view(u0, layout, nx)
+    mid = cld(nx, 2)
+    U0[1, mid] = 1.0
 
+    solver_config = SolverConfig(
+        formulation=UnsplitFormulation(),
+        algorithm=Rodas5(),
+        abstol=1e-8,
+        reltol=1e-6,
+    )
+
+    return solve_problem(model, u0, tspan, solver_config)
 end

@@ -1,11 +1,6 @@
-module Mesh
-
-export create_mesh
-
-function create_mesh(nx::Int, length::Float64)
-    x = range(0, length; length=nx)
-    dx = step(x)
-    return x, dx
-end
-
+function Mesh1D(length::Real, nx::Integer)
+    nx >= 2 || throw(ArgumentError("nx must be at least 2"))
+    x = collect(range(zero(length), length; length=nx))
+    dx = x[2] - x[1]
+    return Mesh1D(x, dx)
 end

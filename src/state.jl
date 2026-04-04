@@ -1,19 +1,11 @@
-module State
-
-export create_initial_state, reshape_state
-
-"""
-State layout:
-flattened vector for solver
-but logically: (species, level, node)
-"""
-
-function create_initial_state(nspecies, nlevels, nx)
-    return zeros(nspecies * nlevels * nx)
+function state_view(u::AbstractVector, layout::VariableLayout, nx::Integer)
+    reshape(u, nvariables(layout), nx)
 end
 
-function reshape_state(u, nspecies, nlevels, nx)
-    return reshape(u, nspecies, nlevels, nx)
-end
+node_view(U::AbstractMatrix, ix::Integer) = @view U[:, ix]
+variable_view(U::AbstractMatrix, ivar::Integer) = @view U[ivar, :]
 
+function group_view(U::AbstractMatrix, layout::VariableLayout, group::Symbol)
+    r = layout.group_ranges[group]
+    @view U[r, :]
 end
