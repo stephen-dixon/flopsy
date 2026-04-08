@@ -1,0 +1,49 @@
+name: Documentation
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  pull_request:
+  workflow_dispatch:
+
+# Required for GitHub Pages deploy and commit status updates
+permissions:
+  contents: write
+  statuses: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+
+      - uses: julia-actions/cache@v2
+
+      - name: Install docs dependencies
+        # Develop the local Flopsy package so Documenter can import it.
+        # Palioxis is a weakdep and is not needed to build the docs.
+        run: |
+          julia --project=docs/ -e '
+            using Pkg
+            Pkg.develop(PackageSpec(path=pwd()))
+            Pkg.instantiate()
+          '
+
+      - name: Build docs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # DOCUMENTER_KEY is required for SSH-key-based deploy.
+          # Generate with: julia -e 'using DocumenterTools; DocumenterTools.genkeys()'
+          # then add the public key as a deploy key on the repo and the private key
+          # as the DOCUMENTER_KEY secret.
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
+        run: julia --project=docs/ docs/make.jl

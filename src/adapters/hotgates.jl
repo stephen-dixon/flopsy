@@ -1,22 +1,24 @@
-abstract type AbstractTemperatureProvider end
-
-struct ConstantTemperature{T} <: AbstractTemperatureProvider
-    value::T
-end
-
-temperature_at(tp::ConstantTemperature, ctx, t, ix) = tp.value
-
-
 """
-Mapping metadata between Flopsy local node state and a Hotgates-like backend.
+Mapping metadata between Flopsy's local node state and a Hotgates-like backend.
 
-Assumes a local solver state vector contains all variables for one spatial node.
+Fields:
+- `mobile_indices`  — indices of mobile species in the local Flopsy state vector
+- `trap_indices`    — indices of trapped species in the local Flopsy state vector
+- `mobile_names`    — species names for mobile variables (metadata / postprocessing)
+- `trap_names`      — species names for trapped variables
+- `defect_names`    — species names for defect sites (not in state vector)
+- `defects`         — spatially-varying defect concentration profile,
+                      shape `(n_defects, nx)`.  Column `ix` is the defect vector
+                      at node `ix`.  Use `zeros(Float64, 0, nx)` for backends
+                      that do not require defect data (e.g. FakeHotgatesModel).
 """
 struct HotgatesTrappingAdaptor{I,N}
     mobile_indices::Vector{I}
     trap_indices::Vector{I}
     mobile_names::Vector{N}
     trap_names::Vector{N}
+    defect_names::Vector{N}
+    defects::Matrix{Float64}
 end
 
 
@@ -56,8 +58,8 @@ end
 """
 Build a generic reaction-diffusion model using a Hotgates-like reaction backend.
 
-`diffusion_coefficients` should be length nvariables(layout), with zeros for
-non-diffusing variables.
+`diffusion_coefficients` must have length `nvariables(layout)`, with zeros for
+non-diffusing variables (typically all trap species).
 """
 function build_hotgates_trapping_model(;
     mesh::Mesh1D,
@@ -65,6 +67,7 @@ function build_hotgates_trapping_model(;
     adaptor::HotgatesTrappingAdaptor,
     temperature::AbstractTemperatureProvider,
     diffusion_coefficients::AbstractVector,
+    boundary = nothing,
 )
     layout = build_hotgates_variable_layout(adaptor)
 
@@ -74,7 +77,6 @@ function build_hotgates_trapping_model(;
     reaction = HotgatesReactionOperator(model, adaptor, temperature)
 
     selector(layout::VariableLayout) = variables_with_tag(layout, :diffusion)
-    # diffusion = LinearDiffusionOperator(collect(diffusion_coefficients), selector)
     diffusion = LinearDiffusionOperator(collect(diffusion_coefficients), selector, nothing)
 
     return build_rd_model(
@@ -82,6 +84,7 @@ function build_hotgates_trapping_model(;
         mesh = mesh,
         reaction = reaction,
         diffusion = diffusion,
+        boundary = boundary,
     )
 end
 
@@ -110,16 +113,19 @@ end
 """
 Default local bridge for trapping-style Hotgates adaptors.
 
-This is intentionally simple and allocates per node for correctness-first
-development. We can replace with reusable caches later.
+Extracts mobile and trapped concentrations from the node state, calls
+`hotgates_rates!` on the backend model, and accumulates the result back into
+the node residual.  Defect concentrations are taken from `adaptor.defects[:, ix]`.
 """
 function local_rhs!(du_local, u_local, model, adaptor::HotgatesTrappingAdaptor, ctx, t, ix, T)
     nm = length(adaptor.mobile_indices)
     nt = length(adaptor.trap_indices)
+    nd = size(adaptor.defects, 1)
 
-    mobile = similar(u_local, nm)
+    mobile  = similar(u_local, nm)
     trapped = similar(u_local, nt)
-    dmobile = similar(u_local, nm)
+    defects = nd > 0 ? adaptor.defects[:, ix] : similar(u_local, 0)
+    dmobile  = similar(u_local, nm)
     dtrapped = similar(u_local, nt)
 
     @inbounds for (j, idx) in enumerate(adaptor.mobile_indices)
@@ -130,7 +136,7 @@ function local_rhs!(du_local, u_local, model, adaptor::HotgatesTrappingAdaptor, 
         trapped[j] = u_local[idx]
     end
 
-    hotgates_rates!(dmobile, dtrapped, model, mobile, trapped, T)
+    hotgates_rates!(dmobile, dtrapped, model, mobile, defects, trapped, T)
 
     @inbounds for (j, idx) in enumerate(adaptor.mobile_indices)
         du_local[idx] += dmobile[j]
@@ -145,19 +151,63 @@ end
 
 
 # ------------------------------------------------------------------
-# Fake backend for testing the adaptor path before wiring real Hotgates
+# Stub for the real Palioxis backend — implemented in ext/PalioxisExt.jl
 # ------------------------------------------------------------------
 
 """
-A fake Hotgates-like backend model.
+    build_palioxis_trapping_model(; palioxis_model, mesh, defects, temperature,
+                                    diffusion_coefficients)
 
-Implements simple trapping/detrapping for any number of mobile and trap variables:
-for each pair j,
-    mobile_j  <-> trap_j
+Build a Flopsy model backed by a real `Palioxis.MultipleDefectModel`.
 
-using:
+Requires the `Palioxis` package to be loaded (provided via the `PalioxisExt`
+package extension).  Loading `Palioxis` alongside `Flopsy` automatically
+activates the extension.
+
+# Arguments
+- `palioxis_model` — a constructed `Palioxis.MultipleDefectModel`
+- `mesh`           — `Mesh1D` defining the spatial domain
+- `defects`        — `Matrix{Float64}` of shape `(n_traps, nx)` with the
+                     spatially-varying defect concentration profile.
+                     Use `Palioxis.get_defect_concentrations(model, z1, z2)`
+                     to build per-node columns.
+- `temperature`    — an `AbstractTemperatureProvider`
+- `diffusion_coefficients` — length-`n_gas` vector (traps do not diffuse)
+"""
+function build_palioxis_trapping_model end
+
+
+"""
+    build_equilibrium_ic(palioxis_model, adaptor, mobile_profile, T) -> Vector{Float64}
+
+Build a flat initial-state vector where mobile species concentrations are set from
+`mobile_profile` and trapped species are placed at their Palioxis equilibrium values
+for temperature `T`.
+
+`mobile_profile` may be:
+- A `Vector{Float64}` of length `nx` (single mobile species)
+- A `Matrix{Float64}` of shape `(n_gas, nx)` (multiple mobile species)
+
+Calls `Palioxis.set_initial_conditions` per spatial node.
+Requires the `Palioxis` package extension to be loaded.
+
+See also `Palioxis.calculate_steady_state!` for finding full equilibrium when
+the initial mobile/trapped split is not known a priori.
+"""
+function build_equilibrium_ic end
+
+
+# ------------------------------------------------------------------
+# Fake backend for testing the adaptor path before wiring real Palioxis
+# ------------------------------------------------------------------
+
+"""
+A fake Hotgates-like backend model for testing without the real Palioxis library.
+
+Implements simple trapping/detrapping for any number of mobile/trap pairs:
     trap_flux   = k_trap   * mobile_j * (1 - trap_j)
-    detrap_flux = k_detrap * trap_j
+    detrap_flux = k_detrap * trapped_j
+    net         = trap_flux - detrap_flux
 """
 struct FakeHotgatesModel{T}
     k_trap::T
@@ -166,27 +216,27 @@ end
 
 
 """
-Hotgates-like in-place rates API expected by the adaptor.
+    hotgates_rates!(dmobile, dtrapped, model, mobile, defects, trapped, T)
 
-Arguments:
-- dmobile, dtrapped: outputs
-- model: backend model object
-- mobile, trapped: local state vectors
-- T: temperature
+In-place reaction rates API used by `local_rhs!`.
+
+`dmobile` and `dtrapped` are output buffers (written, not accumulated).
+`defects` is the defect concentration vector for the current node (may be
+length-0 for backends that do not use it).
 """
-function hotgates_rates!(dmobile, dtrapped, model::FakeHotgatesModel, mobile, trapped, T)
-    fill!(dmobile, zero(eltype(dmobile)))
+function hotgates_rates!(dmobile, dtrapped, model::FakeHotgatesModel, mobile, defects, trapped, T)
+    fill!(dmobile,  zero(eltype(dmobile)))
     fill!(dtrapped, zero(eltype(dtrapped)))
 
     length(mobile) == length(trapped) ||
-        throw(ArgumentError("FakeHotgatesModel expects same number of mobile and trap variables"))
+        throw(ArgumentError("FakeHotgatesModel expects equal numbers of mobile and trap variables"))
 
     @inbounds for j in eachindex(mobile, trapped, dmobile, dtrapped)
-        trap_flux = model.k_trap * mobile[j] * (1 - trapped[j])
+        trap_flux   = model.k_trap   * mobile[j] * (1 - trapped[j])
         detrap_flux = model.k_detrap * trapped[j]
         net = trap_flux - detrap_flux
 
-        dmobile[j] -= net
+        dmobile[j]  -= net
         dtrapped[j] += net
     end
 

@@ -15,9 +15,7 @@ end
 
 Return the spatial profile of variable `var` at a given saved time index.
 
-`var` may be:
-- an integer variable index
-- a Symbol variable name
+`var` may be an integer variable index or a Symbol variable name.
 """
 function variable_snapshot(result::SimulationResult, var; time_index=length(result.solution.u))
     model = result.model
@@ -33,7 +31,7 @@ end
 """
     variable_timeseries(result, var)
 
-Return a matrix of size (nt, nx) for one variable over all saved times.
+Return a matrix of size `(nt, nx)` for one variable over all saved times.
 """
 function variable_timeseries(result::SimulationResult, var)
     model = result.model
@@ -56,7 +54,7 @@ end
 """
     integrated_variable(result, var)
 
-Compute a simple spatial integral over time for variable `var`.
+Spatial integral of variable `var` over time (simple trapezoidal rule with uniform dx).
 Returns a vector with one value per saved time.
 """
 function integrated_variable(result::SimulationResult, var)
@@ -73,6 +71,69 @@ function integrated_variable(result::SimulationResult, var)
 end
 
 
+"""
+    surface_diffusive_fluxes(result) -> Dict{Symbol, NamedTuple}
+
+Compute the outward diffusive flux at both domain boundaries for each diffusing
+variable over all saved times.
+
+Returns a `Dict` keyed by variable name.  Each entry is a `NamedTuple`:
+    `(left = Vector{Float64}, right = Vector{Float64})`
+
+Sign convention: **positive in the direction of the outward-facing normal**.
+
+- **left**:  `D * (C[2] - C[1]) / dx`     — outward normal is −x; equals `D * ∂C/∂x|_{x=0}`
+- **right**: `D * (C[nx-1] - C[nx]) / dx` — outward normal is +x; equals `−D * ∂C/∂x|_{x=L}`
+
+Both are positive during TDS desorption where the surface concentration is lower than
+the bulk (vacuum boundary conditions), giving a positive outward flux at both faces.
+
+Returns an empty Dict if no `LinearDiffusionOperator` is present in the model.
+"""
+function surface_diffusive_fluxes(result::SimulationResult)
+    model = result.model
+    diffop = model.operators.diffusion
+
+    diffop isa LinearDiffusionOperator || return Dict{Symbol,NamedTuple}()
+
+    layout = model.layout
+    mesh = model.context.mesh
+    dx = mesh.dx
+    nx = model.context.nx
+    vars = diffop.selector(layout)
+    names = variable_names(layout)
+    nt = length(result.solution.u)
+
+    out = Dict{Symbol,NamedTuple}()
+
+    for ivar in vars
+        D = diffop.coefficients[ivar]
+        left_flux  = zeros(Float64, nt)
+        right_flux = zeros(Float64, nt)
+
+        for it in 1:nt
+            U = state_view(result.solution.u[it], layout, nx)
+            left_flux[it]  =  D * (U[ivar, 2]    - U[ivar, 1])    / dx
+            right_flux[it] =  D * (U[ivar, nx-1] - U[ivar, nx])   / dx
+        end
+
+        out[names[ivar]] = (left = left_flux, right = right_flux)
+    end
+
+    return out
+end
+
+
+"""
+    build_summary_dataframe(result)
+
+Build a `DataFrame` of scalar time-series summaries:
+- `time`                      — saved times
+- `integral_<var>`            — spatial integral of each variable
+- `left_flux_<var>`           — left-surface desorption flux for each diffusing variable
+- `right_flux_<var>`          — right-surface desorption flux for each diffusing variable
+- any extra entries from `result.summaries[:extra_timeseries]`
+"""
 function build_summary_dataframe(result::SimulationResult)
     layout = result.model.layout
     names = variable_names(layout)
@@ -82,6 +143,12 @@ function build_summary_dataframe(result::SimulationResult)
 
     for name in names
         df[!, Symbol("integral_", name)] = integrated_variable(result, name)
+    end
+
+    fluxes = surface_diffusive_fluxes(result)
+    for (varname, fl) in pairs(fluxes)
+        df[!, Symbol("left_flux_",  varname)] = fl.left
+        df[!, Symbol("right_flux_", varname)] = fl.right
     end
 
     if haskey(result.summaries, :extra_timeseries)
@@ -113,10 +180,11 @@ end
 Write pointwise variable outputs over time to HDF5.
 
 Layout:
-- /time                  : saved times
-- /mesh/x                : spatial coordinates
-- /fields/<varname>      : matrix (nt, nx)
-- /metadata/...          : selected metadata as string attributes/datasets
+- `/time`              — saved times (Float64 vector)
+- `/mesh/x`            — spatial node coordinates
+- `/mesh/dx`           — node spacing
+- `/fields/<varname>`  — matrix `(nt, nx)` for each variable
+- `/metadata/...`      — selected metadata as string datasets
 """
 function write_field_output_hdf5(result::SimulationResult, path::AbstractString)
     model = result.model
@@ -139,12 +207,71 @@ function write_field_output_hdf5(result::SimulationResult, path::AbstractString)
             try
                 g_meta[string(k)] = string(v)
             catch
-                # fallback silently for now
             end
         end
     end
 
     return path
+end
+
+
+"""
+    load_ic_from_hdf5(path, model; time_index=:last) -> Vector{Float64}
+
+Load an initial condition from a previously written HDF5 field output file.
+
+Matches variables by name between the file and `model.layout`.  Variables present
+in the model but absent from the file are initialised to zero with a warning.
+This allows chaining simulations where the variable set differs (e.g. adding
+a new trap type) or the number of nodes changes (mesh must match).
+
+# Arguments
+- `path`        — path to the HDF5 file written by `write_field_output_hdf5`
+- `model`       — the target `SystemModel`
+- `time_index`  — integer index into the saved time axis, or `:last` (default)
+                  to use the final saved state
+
+# Example — chaining implantation and desorption runs
+```julia
+# Implantation run
+res_implant = run_simulation("implant.toml")
+write_field_output_hdf5(res_implant, "implant_out.h5")
+
+# Desorption run starting from the end of implantation
+u0 = load_ic_from_hdf5("implant_out.h5", model_desorption)
+sol = solve_problem(model_desorption, u0, (0.0, t_tds), solver_config)
+```
+"""
+function load_ic_from_hdf5(
+    path::AbstractString,
+    model::SystemModel;
+    time_index::Union{Int,Symbol} = :last,
+)
+    layout = model.layout
+    nx = model.context.nx
+    u0 = zeros(Float64, nvariables(layout) * nx)
+    U0 = state_view(u0, layout, nx)
+
+    h5open(path, "r") do h5
+        available = Set(keys(h5["fields"]))
+
+        for (ivar, name) in enumerate(variable_names(layout))
+            sname = string(name)
+
+            if sname ∈ available
+                data = read(h5["fields"][sname])   # (nt, nx)
+                size(data, 2) == nx || throw(DimensionMismatch(
+                    "Variable $name in $path has $(size(data,2)) nodes; model expects $nx"
+                ))
+                idx = time_index === :last ? size(data, 1) : Int(time_index)
+                U0[ivar, :] .= data[idx, :]
+            else
+                @warn "Variable $name not found in $path — initialising to zero"
+            end
+        end
+    end
+
+    return u0
 end
 
 
@@ -181,22 +308,14 @@ function _resolve_variable_index(layout::VariableLayout, var::Symbol)
     return idx
 end
 
-# optional plotting helpers if Plots.jl is added later
-# using Plots
-
-# function plot_snapshot(result::SimulationResult, var; time_index=length(result.solution.u))
-#     x = result.model.context.mesh.x
-#     y = variable_snapshot(result, var; time_index=time_index)
-#     return plot(x, y, xlabel="x", ylabel=string(var), label=string(var))
-# end
 
 function library_versions()
     return Dict(
-        "julia_version" => string(VERSION),
-        "flopsy_version" => "0.1.0-dev",
-        "scimlbase_loaded" => isdefined(Main, :SciMLBase) || isdefined(Flopsy, :SciMLBase),
+        "julia_version"         => string(VERSION),
+        "flopsy_version"        => "0.1.0-dev",
+        "scimlbase_loaded"      => isdefined(Main, :SciMLBase) || isdefined(Flopsy, :SciMLBase),
         "ordinarydiffeq_loaded" => isdefined(Main, :OrdinaryDiffEq) || isdefined(Flopsy, :OrdinaryDiffEq),
-        "sundials_loaded" => isdefined(Main, :Sundials) || isdefined(Flopsy, :Sundials),
+        "sundials_loaded"       => isdefined(Main, :Sundials) || isdefined(Flopsy, :Sundials),
     )
 end
 

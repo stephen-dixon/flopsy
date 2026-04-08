@@ -3,6 +3,7 @@ function build_rd_model(;
     mesh::Mesh1D,
     reaction::Union{AbstractOperator,Nothing}=nothing,
     diffusion::Union{AbstractOperator,Nothing}=nothing,
+    boundary::Union{AbstractOperator,Nothing}=nothing,
     constraints::Union{AbstractOperator,Nothing}=nothing,
     aux::Dict{Symbol,Any}=Dict{Symbol,Any}(),
 )
@@ -17,8 +18,9 @@ function build_rd_model(;
     )
 
     operators = (
-        reaction = reaction,
-        diffusion = diffusion,
+        reaction    = reaction,
+        diffusion   = diffusion,
+        boundary    = boundary,
         constraints = constraints,
     )
 

@@ -16,6 +16,7 @@ include("variables.jl")
 include("state.jl")
 include("mesh.jl")
 include("config.jl")
+include("temperature.jl")
 
 include("operators/operators.jl")
 include("operators/reaction.jl")
@@ -88,6 +89,7 @@ export
     active_operators,
 
     LinearDiffusionOperator,
+    DirichletBoundaryOperator,
     ToyReactionOperator,
     SimpleTrappingReactionOperator,
     ConstraintOperator,
@@ -109,27 +111,31 @@ export
     load_config,
     run_simulation,
 
-    HotgatesReactionOperator
-
     SimulationResult,
     wrap_result,
     variable_timeseries,
     variable_snapshot,
     integrated_variable,
+    surface_diffusive_fluxes,
     build_summary_dataframe,
     write_field_output_hdf5,
     write_summary_csv,
+    load_ic_from_hdf5,
     print_run_banner,
     solver_stats_dict,
 
-        AbstractTemperatureProvider,
+    AbstractTemperatureProvider,
     ConstantTemperature,
+    LinearRampTemperature,
+    FunctionTemperature,
     temperature_at,
 
     HotgatesTrappingAdaptor,
     HotgatesReactionOperator,
     build_hotgates_variable_layout,
     build_hotgates_trapping_model,
+    build_palioxis_trapping_model,
+    build_equilibrium_ic,
 
     FakeHotgatesModel,
     hotgates_rates!

@@ -145,11 +145,15 @@ function build_fake_hotgates_trapping_model(cfg, mesh::Mesh1D)
 
     backend = FakeHotgatesModel(k_trap, k_detrap)
 
+    nx = length(mesh.x)
+
     adaptor = HotgatesTrappingAdaptor(
         [1],               # mobile indices in local Flopsy state
         [2],               # trap indices in local Flopsy state
         ["c"],
         ["theta"],
+        String[],          # no defect species
+        zeros(Float64, 0, nx),  # FakeHotgatesModel does not use defects
     )
 
     diffusion_coeffs = [diffusion_coefficient, 0.0]
