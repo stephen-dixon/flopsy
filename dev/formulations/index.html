@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Formulations · Flopsy.jl</title><meta name="title" content="Formulations · Flopsy.jl"/><meta property="og:title" content="Formulations · Flopsy.jl"/><meta property="twitter:title" content="Formulations · Flopsy.jl"/><meta name="description" content="Documentation for Flopsy.jl."/><meta property="og:description" content="Documentation for Flopsy.jl."/><meta property="twitter:description" content="Documentation for Flopsy.jl."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">Flopsy.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../architecture/">Architecture</a></li><li class="is-active"><a class="tocitem" href>Formulations</a><ul class="internal"><li><a class="tocitem" href="#Quick-Reference"><span>Quick Reference</span></a></li><li><a class="tocitem" href="#UnsplitFormulation"><span>UnsplitFormulation</span></a></li><li><a class="tocitem" href="#IMEXFormulation"><span>IMEXFormulation</span></a></li><li><a class="tocitem" href="#SplitFormulation"><span>SplitFormulation</span></a></li><li><a class="tocitem" href="#ResidualFormulation"><span>ResidualFormulation</span></a></li><li><a class="tocitem" href="#Choosing-a-Formulation"><span>Choosing a Formulation</span></a></li></ul></li><li><a class="tocitem" href="../hotgates/">Hotgates Interface</a></li><li><a class="tocitem" href="../hdf5/">HDF5 Output</a></li><li><a class="tocitem" href="../plotting/">Plotting</a></li><li><a class="tocitem" href="../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Formulations</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Formulations</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/stephen-dixon/flopsy" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/stephen-dixon/flopsy/blob/main/docs/src/formulations.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Formulations"><a class="docs-heading-anchor" href="#Formulations">Formulations</a><a id="Formulations-1"></a><a class="docs-heading-anchor-permalink" href="#Formulations" title="Permalink"></a></h1><p>A <strong>formulation</strong> determines how operators are assembled into a time-integration problem. Flopsy provides five formulations that cover the full range from simple monolithic ODEs to operator-split methods and DAE quasi-static approximations.</p><h2 id="Quick-Reference"><a class="docs-heading-anchor" href="#Quick-Reference">Quick Reference</a><a id="Quick-Reference-1"></a><a class="docs-heading-anchor-permalink" href="#Quick-Reference" title="Permalink"></a></h2><table><tr><th style="text-align: right">Formulation</th><th style="text-align: right">Type</th><th style="text-align: right">Algorithm</th><th style="text-align: right">When to use</th></tr><tr><td style="text-align: right"><code>UnsplitFormulation</code></td><td style="text-align: right">Monolithic ODE</td><td style="text-align: right"><code>Rodas5P()</code>, <code>CVODE_BDF()</code></td><td style="text-align: right">Default; stiff problems with analytic Jacobian</td></tr><tr><td style="text-align: right"><code>IMEXFormulation</code></td><td style="text-align: right">IMEX split ODE</td><td style="text-align: right"><code>KenCarp4()</code></td><td style="text-align: right">Diffusion-dominated stiffness</td></tr><tr><td style="text-align: right"><code>SplitFormulation(LieSplit())</code></td><td style="text-align: right">Operator split</td><td style="text-align: right"><code>Rodas5(autodiff=AutoFiniteDiff())</code></td><td style="text-align: right">Physical process separation, 1st order</td></tr><tr><td style="text-align: right"><code>SplitFormulation(StrangSplit())</code></td><td style="text-align: right">Operator split</td><td style="text-align: right"><code>Rodas5(autodiff=AutoFiniteDiff())</code></td><td style="text-align: right">Physical process separation, 2nd order</td></tr><tr><td style="text-align: right"><code>ResidualFormulation</code></td><td style="text-align: right">Mass-matrix DAE</td><td style="text-align: right"><code>Rodas5P()</code></td><td style="text-align: right">Quasi-static trapping (fast trapping limit)</td></tr></table><hr/><h2 id="UnsplitFormulation"><a class="docs-heading-anchor" href="#UnsplitFormulation">UnsplitFormulation</a><a id="UnsplitFormulation-1"></a><a class="docs-heading-anchor-permalink" href="#UnsplitFormulation" title="Permalink"></a></h2><p>All operators are summed into a single <code>f!(du, u, p, t)</code> and passed to a stiff ODE solver. When all operators implement analytic Jacobians (which is the case for the built-in <code>SimpleTrappingReactionOperator</code>, <code>LinearDiffusionOperator</code>, and <code>DirichletBoundaryOperator</code>), <code>build_problem</code> automatically constructs a sparse <code>ODEFunction</code> with the block-tridiagonal Jacobian structure.</p><p>For Palioxis-backed models using <code>HotgatesReactionOperator</code>, the analytic Jacobian is unavailable and the solver falls back to finite-difference differentiation.</p><pre><code class="language-julia hljs">using Flopsy
+using OrdinaryDiffEq
+using ADTypes: AutoFiniteDiff
+
+config = SolverConfig(
+    formulation = UnsplitFormulation(),
+    algorithm   = Rodas5(autodiff = AutoFiniteDiff()),
+    abstol      = 1e-10,
+    reltol      = 1e-8,
+    saveat      = collect(0.0:100.0:3600.0),
+)
+
+sol    = solve_problem(model, u0, tspan, config)
+result = wrap_result(model, sol, config)</code></pre><p><strong>With Palioxis:</strong></p><pre><code class="language-julia hljs">using Flopsy
+using Palioxis
+using OrdinaryDiffEq
+using ADTypes: AutoFiniteDiff
+
+Palioxis.init(ENV[&quot;PALIOXIS_ROOT&quot;])
+pal  = MultipleDefectModel(ENV[&quot;PALIOXIS_XML&quot;])
+mesh = Mesh1D(1e-3, 200)
+defects = fill(1e-3, get_n_trap_types(pal), 200)
+
+model = build_palioxis_trapping_model(
+    palioxis_model = pal,
+    mesh           = mesh,
+    defects        = defects,
+    temperature    = LinearRampTemperature(300.0, 10.0/60.0),
+    left_bc        = t -&gt; 0.0,
+    right_bc       = t -&gt; 0.0,
+)
+
+u0 = zeros(nvariables(model.layout) * 200)
+
+config = SolverConfig(
+    formulation = UnsplitFormulation(),
+    algorithm   = Rodas5(autodiff = AutoFiniteDiff()),
+    abstol      = 1e-10,
+    reltol      = 1e-8,
+    saveat      = collect(0.0:10.0:54000.0),   # 10 s intervals over 15 h TDS ramp
+)
+
+result = wrap_result(model, solve_problem(model, u0, (0.0, 54000.0), config), config)
+write_field_output_hdf5(result, &quot;tds_fields.h5&quot;)
+write_summary_csv(result, &quot;tds_summary.csv&quot;)</code></pre><hr/><h2 id="IMEXFormulation"><a class="docs-heading-anchor" href="#IMEXFormulation">IMEXFormulation</a><a id="IMEXFormulation-1"></a><a class="docs-heading-anchor-permalink" href="#IMEXFormulation" title="Permalink"></a></h2><p>Splits the problem into a <em>stiff implicit</em> part (diffusion + boundary operators) and a <em>non-stiff explicit</em> part (reaction operators).  Assembles a <code>SplitODEProblem</code> and uses an IMEX Runge-Kutta algorithm.</p><p>This can be faster than <code>UnsplitFormulation</code> when diffusion dominates stiffness and the reaction term is relatively cheap.  It is less effective when trapping reaction timescales are stiff too (e.g. at low temperatures with very fast trapping).</p><pre><code class="language-julia hljs">using Flopsy
+using OrdinaryDiffEq
+
+config = SolverConfig(
+    formulation = IMEXFormulation(),
+    algorithm   = KenCarp4(),
+    abstol      = 1e-9,
+    reltol      = 1e-7,
+    saveat      = collect(saveat_times),
+)
+
+result = wrap_result(model, solve_problem(model, u0, tspan, config), config)</code></pre><p><strong>With Palioxis:</strong></p><p>The <code>HotgatesReactionOperator</code> routes to the explicit part; <code>LinearDiffusionOperator</code> and <code>DirichletBoundaryOperator</code> form the implicit part — the partition is automatic.</p><pre><code class="language-julia hljs">config = SolverConfig(
+    formulation = IMEXFormulation(),
+    algorithm   = KenCarp4(),
+    abstol      = 1e-10,
+    reltol      = 1e-8,
+    saveat      = collect(0.0:10.0:54000.0),
+)
+
+result = wrap_result(model, solve_problem(model, u0, tspan, config), config)</code></pre><hr/><h2 id="SplitFormulation"><a class="docs-heading-anchor" href="#SplitFormulation">SplitFormulation</a><a id="SplitFormulation-1"></a><a class="docs-heading-anchor-permalink" href="#SplitFormulation" title="Permalink"></a></h2><p>Explicit operator-splitting loop with a fixed macro-step <code>dt</code>.  At each macro-step the reaction and diffusion sub-problems are each solved as independent ODEs, then the results are chained.  Two schemes are provided:</p><h3 id="LieSplit-(first-order)"><a class="docs-heading-anchor" href="#LieSplit-(first-order)">LieSplit (first-order)</a><a id="LieSplit-(first-order)-1"></a><a class="docs-heading-anchor-permalink" href="#LieSplit-(first-order)" title="Permalink"></a></h3><p>Each macro-step: reaction sub-step → diffusion sub-step.</p><pre><code class="language-julia hljs">using Flopsy
+using OrdinaryDiffEq
+using ADTypes: AutoFiniteDiff
+
+config = SolverConfig(
+    formulation = SplitFormulation(LieSplit()),
+    algorithm   = Rodas5(autodiff = AutoFiniteDiff()),
+    dt          = 5.0,           # macro-step size (seconds)
+    abstol      = 1e-9,
+    reltol      = 1e-7,
+    saveat      = collect(saveat_times),
+)
+
+result = wrap_result(model, solve_problem(model, u0, tspan, config), config)</code></pre><h3 id="StrangSplit-(second-order)"><a class="docs-heading-anchor" href="#StrangSplit-(second-order)">StrangSplit (second-order)</a><a id="StrangSplit-(second-order)-1"></a><a class="docs-heading-anchor-permalink" href="#StrangSplit-(second-order)" title="Permalink"></a></h3><p>Each macro-step: half reaction → full diffusion → half reaction.  Second-order accurate in the macro-step size; preferred over <code>LieSplit</code> when a coarser <code>dt</code> is needed.</p><pre><code class="language-julia hljs">config = SolverConfig(
+    formulation = SplitFormulation(StrangSplit()),
+    algorithm   = Rodas5(autodiff = AutoFiniteDiff()),
+    dt          = 10.0,
+    abstol      = 1e-9,
+    reltol      = 1e-7,
+    saveat      = collect(saveat_times),
+)
+
+result = wrap_result(model, solve_problem(model, u0, tspan, config), config)</code></pre><div class="admonition is-info" id="Note-8ed76f78192c237c"><header class="admonition-header">Note<a class="admonition-anchor" href="#Note-8ed76f78192c237c" title="Permalink"></a></header><div class="admonition-body"><p>Sub-step ODEs have no analytic Jacobian.  Use <code>Rodas5(autodiff = AutoFiniteDiff())</code> rather than the default <code>Rodas5()</code> to avoid type conflicts between ForwardDiff <code>Dual</code> numbers and pre-allocated <code>Float64</code> scratch buffers.</p></div></div><p><strong>With Palioxis:</strong></p><p>Splitting is particularly useful when the Palioxis reaction kernel is expensive and the diffusion step benefits from a different tolerance or step size.</p><pre><code class="language-julia hljs">using Flopsy
+using Palioxis
+using OrdinaryDiffEq
+using ADTypes: AutoFiniteDiff
+
+# model built as above with build_palioxis_trapping_model(...)
+
+config = SolverConfig(
+    formulation = SplitFormulation(StrangSplit()),
+    algorithm   = Rodas5(autodiff = AutoFiniteDiff()),
+    dt          = 10.0,          # 10 s macro-step
+    abstol      = 1e-9,
+    reltol      = 1e-7,
+    saveat      = collect(0.0:60.0:54000.0),
+)
+
+result = wrap_result(model, solve_problem(model, u0, tspan, config), config)</code></pre><hr/><h2 id="ResidualFormulation"><a class="docs-heading-anchor" href="#ResidualFormulation">ResidualFormulation</a><a id="ResidualFormulation-1"></a><a class="docs-heading-anchor-permalink" href="#ResidualFormulation" title="Permalink"></a></h2><p>DAE formulation using a singular mass matrix.  Variables in the <code>:trap</code> group receive zero mass-matrix diagonals (algebraic constraint rows); all other variables are ODE rows. This enforces <em>quasi-static trap equilibrium</em> at every time step.</p><p>Use this formulation when trapping kinetics are much faster than diffusion, so that traps can be considered always in equilibrium with the local mobile concentration.</p><pre><code class="language-julia hljs">using Flopsy
+using OrdinaryDiffEq
+
+config = SolverConfig(
+    formulation = ResidualFormulation(),
+    algorithm   = Rodas5P(),
+    abstol      = 1e-9,
+    reltol      = 1e-7,
+    saveat      = collect(saveat_times),
+)
+
+result = wrap_result(model, solve_problem(model, u0, tspan, config), config)</code></pre><div class="admonition is-warning" id="Different-physical-model-9a1882822d856181"><header class="admonition-header">Different physical model<a class="admonition-anchor" href="#Different-physical-model-9a1882822d856181" title="Permalink"></a></header><div class="admonition-body"><p><code>ResidualFormulation</code> enforces quasi-static trap equilibrium.  Discrepancies between this and <code>UnsplitFormulation</code> are <em>physical</em> (the quasi-static approximation), not numerical error.  Only use it when the trap relaxation time is much shorter than the diffusion timescale.</p></div></div><hr/><h2 id="Choosing-a-Formulation"><a class="docs-heading-anchor" href="#Choosing-a-Formulation">Choosing a Formulation</a><a id="Choosing-a-Formulation-1"></a><a class="docs-heading-anchor-permalink" href="#Choosing-a-Formulation" title="Permalink"></a></h2><p><strong>Start with <code>UnsplitFormulation</code>.</strong>  It uses an analytic sparse Jacobian (when available) and is the most thoroughly tested path.</p><p>Switch formulations when:</p><ul><li><strong><code>IMEXFormulation</code></strong> — you suspect diffusion-dominated stiffness and want to evaluate whether IMEX stepping is faster for your specific problem.</li><li><strong><code>SplitFormulation(StrangSplit())</code></strong> — you want to decouple physics for interpretability, or the Palioxis reaction kernel is expensive and you want to control the splitting step separately from the within-step tolerance.</li><li><strong><code>ResidualFormulation</code></strong> — trapping is very fast and you want to enforce the quasi-static equilibrium constraint to reduce problem dimensionality.</li></ul><p>All formulations share the same model, initial condition, output helpers (<code>variable_timeseries</code>, <code>build_summary_dataframe</code>, etc.), and HDF5/CSV writers.  You can run the same model with multiple formulations and compare results directly.</p><h3 id="Example:-comparing-formulations-on-the-same-problem"><a class="docs-heading-anchor" href="#Example:-comparing-formulations-on-the-same-problem">Example: comparing formulations on the same problem</a><a id="Example:-comparing-formulations-on-the-same-problem-1"></a><a class="docs-heading-anchor-permalink" href="#Example:-comparing-formulations-on-the-same-problem" title="Permalink"></a></h3><pre><code class="language-julia hljs">using Flopsy, OrdinaryDiffEq, ADTypes
+
+model   = build_trapping_model(mesh=Mesh1D(1e-3, 40), k_trap=5e-3, k_detrap=0.05,
+                               diffusion_coefficient=1e-7)
+u0      = # ... initial condition
+tspan   = (0.0, 200.0)
+saveat  = collect(range(0.0, 200.0; length=101))
+
+configs = Dict(
+    :unsplit =&gt; SolverConfig(formulation=UnsplitFormulation(),
+                             algorithm=Rodas5P(), abstol=1e-9, reltol=1e-7,
+                             saveat=saveat),
+    :imex    =&gt; SolverConfig(formulation=IMEXFormulation(),
+                             algorithm=KenCarp4(), abstol=1e-9, reltol=1e-7,
+                             saveat=saveat),
+    :strang  =&gt; SolverConfig(formulation=SplitFormulation(StrangSplit()),
+                             algorithm=Rodas5(autodiff=AutoFiniteDiff()),
+                             dt=2.0, abstol=1e-9, reltol=1e-7,
+                             saveat=saveat),
+)
+
+results = Dict(name =&gt; wrap_result(model, solve_problem(model, u0, tspan, cfg), cfg)
+               for (name, cfg) in configs)
+
+# Compare final mobile profiles
+for (name, r) in results
+    c_end = variable_snapshot(r, :c)
+    println(&quot;$name  final mobile total = $(sum(c_end) * model.context.mesh.dx)&quot;)
+end</code></pre><p>See <code>examples/formulation_comparison.jl</code> for a full comparison including wall-time benchmarks and error norms.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../architecture/">« Architecture</a><a class="docs-footer-nextpage" href="../hotgates/">Hotgates Interface »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Wednesday 8 April 2026 23:03">Wednesday 8 April 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
