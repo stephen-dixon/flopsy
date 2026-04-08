@@ -5,7 +5,7 @@ using SparseArrays
 using ADTypes: AutoFiniteDiff
 using DataFrames: nrow
 using SciMLBase: ReturnCode
-using OrdinaryDiffEq: Rodas5
+using OrdinaryDiffEq: Rodas5, Rodas5P, KenCarp4
 
 @testset "Flopsy" begin
     include("test_temperature.jl")
@@ -14,4 +14,5 @@ using OrdinaryDiffEq: Rodas5
     include("test_jacobian.jl")
     include("test_output.jl")
     include("test_trapping.jl")
+    include("test_formulations.jl")
 end

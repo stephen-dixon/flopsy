@@ -315,8 +315,11 @@ Extract solver statistics from the SciML solution into a plain dictionary
 """
 function solver_stats_dict(result::SimulationResult)
     sol = result.solution
-    stats = Dict{String,Any}()
 
+    # SplitSolution and other custom solution types may not have a .stats field.
+    hasproperty(sol, :stats) && sol.stats !== nothing || return Dict{String,Any}()
+
+    stats = Dict{String,Any}()
     for name in propertynames(sol.stats)
         try
             stats[string(name)] = getproperty(sol.stats, name)

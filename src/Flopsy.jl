@@ -113,6 +113,9 @@ export
     build_trapping_model,
     trapping_variable_layout,
 
+    SplitProblem,
+    SplitSolution,
+
     build_problem,
     solve_problem,
 
