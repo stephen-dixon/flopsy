@@ -16,6 +16,11 @@ struct ConstantTemperature{T} <: AbstractTemperatureProvider
     value::T
 end
 
+"""
+    temperature_at(provider, ctx, t, ix) -> Real
+
+Return the temperature in Kelvin at node `ix` and time `t`.
+"""
 temperature_at(tp::ConstantTemperature, ctx, t, ix) = tp.value
 
 

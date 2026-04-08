@@ -1,25 +1,65 @@
-struct LinearDiffusionOperator{T,S,B} <: AbstractDiffusionOperator
-    coefficients::Vector{T}
+# ---------------------------------------------------------------------------
+# Internal helper — evaluate D for one variable at the current temperature.
+# Dispatch handles both plain vectors (constant) and AbstractDiffusionCoefficients.
+# ---------------------------------------------------------------------------
+
+_eval_D(coeffs::AbstractVector{<:Real}, ivar::Int, T) = Float64(coeffs[ivar])
+_eval_D(coeffs::AbstractDiffusionCoefficients, ivar::Int, T) = get_D(coeffs, ivar, T)
+
+
+# ---------------------------------------------------------------------------
+# LinearDiffusionOperator
+# ---------------------------------------------------------------------------
+
+"""
+    LinearDiffusionOperator(coefficients, selector, bc[, temperature])
+
+Standard second-order finite-difference diffusion operator for 1D domains.
+
+Uses a one-sided stencil at the boundary nodes that corresponds to zero-flux
+(Neumann) boundary conditions.  Pair with `DirichletBoundaryOperator` to impose
+Dirichlet conditions.
+
+# Arguments
+- `coefficients` — diffusion coefficients per variable.  May be:
+  - `Vector{<:Real}` — constant, temperature-independent
+  - `AbstractDiffusionCoefficients` — e.g. `ArrheniusDiffusion`, `CallableDiffusion`,
+    or a library-provided type such as `PalioxisDiffusionCoefficients`
+- `selector`  — `f(layout) -> Vector{Int}` returning the variable indices to diffuse.
+                Typically `layout -> variables_with_tag(layout, :diffusion)`.
+- `bc`        — reserved for future boundary-condition metadata; pass `nothing`.
+- `temperature` — `AbstractTemperatureProvider` required when `coefficients` is
+                  temperature-dependent; `nothing` for constant coefficients.
+"""
+struct LinearDiffusionOperator{C, S, B, TP} <: AbstractDiffusionOperator
+    coefficients::C
     selector::S
     bc::B
+    temperature::TP
 end
+
+# Backward-compatible 3-argument constructor (constant D, no temperature provider).
+LinearDiffusionOperator(coefficients, selector, bc) =
+    LinearDiffusionOperator(coefficients, selector, bc, nothing)
 
 supports_rhs(::LinearDiffusionOperator) = true
 
 function rhs!(du, op::LinearDiffusionOperator, u, ctx::SystemContext, t)
     layout = ctx.layout
-    nx = ctx.nx
-
-    U = state_view(u, layout, nx)
-    dU = state_view(du, layout, nx)
-
-    dx = ctx.mesh.dx
+    nx     = ctx.nx
+    dx     = ctx.mesh.dx
     invdx2 = inv(dx * dx)
+
+    T_val = op.temperature !== nothing ?
+        Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
+
+    U  = state_view(u, layout, nx)
+    dU = state_view(du, layout, nx)
 
     vars = op.selector(layout)
 
     @inbounds for ivar in vars
-        D = op.coefficients[ivar]
+        D = _eval_D(op.coefficients, ivar, T_val)
 
         dU[ivar, 1] += D * (U[ivar, 2] - U[ivar, 1]) * invdx2
 
@@ -34,77 +74,85 @@ function rhs!(du, op::LinearDiffusionOperator, u, ctx::SystemContext, t)
 end
 
 
-"""
-    DirichletBoundaryOperator(selector, coefficients; left=nothing, right=nothing)
+# ---------------------------------------------------------------------------
+# DirichletBoundaryOperator
+# ---------------------------------------------------------------------------
 
-Applies time-varying Dirichlet boundary conditions to diffusing variables by adding
-ghost-node corrections on top of the zero-flux (Neumann) stencil in
-`LinearDiffusionOperator`.
+"""
+    DirichletBoundaryOperator(selector, coefficients[, temperature]; left=nothing, right=nothing)
+
+Adds ghost-node Dirichlet corrections to boundary nodes for diffusing variables,
+on top of the zero-flux (Neumann) stencil in `LinearDiffusionOperator`.
 
 `left` and `right` are callables `f(t) -> concentration_value`, or `nothing` to
 leave that boundary at zero-flux.  The correction at boundary node 1 is:
 
-    dU[ivar, 1]  += D * (left(t)  - U[ivar, 1])  / dx²
-    dU[ivar, nx] += D * (right(t) - U[ivar, nx]) / dx²
+    dU[ivar, 1]  += D(T) * (left(t)  - U[ivar, 1])  / dx²
+    dU[ivar, nx] += D(T) * (right(t) - U[ivar, nx]) / dx²
 
-Combined with the Neumann stencil already in `LinearDiffusionOperator` this gives
-the standard centred Dirichlet stencil `D*(U[2] - 2*U[1] + g)/dx²`.
+Combined with the Neumann stencil in `LinearDiffusionOperator` this gives the
+standard centred Dirichlet stencil `D*(U[2] - 2*U[1] + g)/dx²`.
 
-# TDS usage
+The `coefficients` argument accepts the same types as `LinearDiffusionOperator`:
+a plain `Vector{<:Real}` for constant D, or any `AbstractDiffusionCoefficients`
+for temperature-dependent D.  Provide a matching `temperature` provider when
+using temperature-dependent coefficients.
 
-For a desorption experiment (both surfaces held at vacuum, i.e. zero concentration):
+# TDS usage — vacuum at both surfaces
 
 ```julia
 boundary = DirichletBoundaryOperator(
-    selector,
-    diffusion_coefficients;
+    selector, diffusion_coefficients, temperature;
     left  = t -> 0.0,
     right = t -> 0.0,
 )
 ```
 
-For a combined implantation+desorption run with a time-varying surface source:
+# TDS usage — implantation then desorption in one run
 
 ```julia
 boundary = DirichletBoundaryOperator(
-    selector,
-    diffusion_coefficients;
-    left  = t -> t < t_implant ? source_conc(t) : 0.0,
+    selector, diffusion_coefficients, temperature;
+    left  = t -> t < t_implant ? surface_conc(t) : 0.0,
     right = t -> 0.0,
 )
 ```
 
 !!! note
     Set the initial condition at boundary nodes to match `left(0)` / `right(0)` to
-    avoid a discontinuity at t=0.
+    avoid a step discontinuity at t = 0.
 """
-struct DirichletBoundaryOperator{S,C,L,R} <: AbstractDiffusionOperator
+struct DirichletBoundaryOperator{C, S, TP, L, R} <: AbstractDiffusionOperator
     selector::S
     coefficients::C
-    left::L   # Union{Nothing, callable f(t)->value}
-    right::R  # Union{Nothing, callable f(t)->value}
+    temperature::TP
+    left::L    # Union{Nothing, callable f(t) -> value}
+    right::R   # Union{Nothing, callable f(t) -> value}
 end
 
-function DirichletBoundaryOperator(selector, coefficients; left=nothing, right=nothing)
-    return DirichletBoundaryOperator(selector, coefficients, left, right)
+function DirichletBoundaryOperator(selector, coefficients, temperature=nothing;
+                                    left=nothing, right=nothing)
+    return DirichletBoundaryOperator(selector, coefficients, temperature, left, right)
 end
 
 supports_rhs(::DirichletBoundaryOperator) = true
 
 function rhs!(du, op::DirichletBoundaryOperator, u, ctx::SystemContext, t)
     layout = ctx.layout
-    nx = ctx.nx
-
-    U = state_view(u, layout, nx)
-    dU = state_view(du, layout, nx)
-
-    dx = ctx.mesh.dx
+    nx     = ctx.nx
+    dx     = ctx.mesh.dx
     invdx2 = inv(dx * dx)
+
+    T_val = op.temperature !== nothing ?
+        Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
+
+    U  = state_view(u, layout, nx)
+    dU = state_view(du, layout, nx)
 
     vars = op.selector(layout)
 
     @inbounds for ivar in vars
-        D = op.coefficients[ivar]
+        D = _eval_D(op.coefficients, ivar, T_val)
 
         if op.left !== nothing
             g = op.left(t)

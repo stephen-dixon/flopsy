@@ -1,10 +1,27 @@
+"Return `true` if the operator contributes an explicit RHS term `du += f(u,t)`."
 supports_rhs(::AbstractOperator) = false
+
+"Return `true` if the operator contributes an implicit RHS term."
 supports_implicit_rhs(::AbstractOperator) = false
+
+"Return `true` if the operator implements a custom `step!` update."
 supports_step(::AbstractOperator) = false
+
+"Return `true` if the operator can form a DAE residual."
 supports_residual(::AbstractOperator) = false
+
+"Return `true` if the operator provides a mass matrix."
 supports_mass_matrix(::AbstractOperator) = false
+
+"Return `true` if the operator can compute an analytic Jacobian."
 supports_jacobian(::AbstractOperator) = false
 
+"""
+    NullOperator
+
+A no-op operator that supports all capability flags.  Used as a placeholder when
+an operator slot (reaction, diffusion, etc.) is not needed.
+"""
 struct NullOperator <: AbstractOperator end
 
 supports_rhs(::NullOperator) = true
@@ -21,28 +38,114 @@ residual!(res, ::NullOperator, du, u, ctx, t) = res
 jacobian!(J, ::NullOperator, u, ctx, t) = J
 mass_matrix(::NullOperator, ctx) = nothing
 
+"""
+    rhs!(du, op, u, ctx, t) -> du
+
+Accumulate the explicit right-hand-side contribution of operator `op` into `du`.
+`du` is zeroed by `OperatorSum` before each call; individual operators should
+add their contribution rather than overwrite.
+"""
 function rhs!(du, op::AbstractOperator, u, ctx, t)
     throw(ArgumentError("rhs! not implemented for operator type $(typeof(op))"))
 end
 
+"""
+    implicit_rhs!(du, op, u, ctx, t) -> du
+
+Accumulate the implicit RHS contribution of operator `op` into `du`.
+"""
 function implicit_rhs!(du, op::AbstractOperator, u, ctx, t)
     throw(ArgumentError("implicit_rhs! not implemented for operator type $(typeof(op))"))
 end
 
+"""
+    step!(u, op, ctx, dt, t) -> u
+
+Apply a custom operator-specific update step of size `dt` in-place to `u`.
+"""
 function step!(u, op::AbstractOperator, ctx, dt, t)
     throw(ArgumentError("step! not implemented for operator type $(typeof(op))"))
 end
 
+"""
+    residual!(res, op, du, u, ctx, t) -> res
+
+Evaluate the DAE residual `F(du, u, t)` for operator `op` into `res`.
+"""
 function residual!(res, op::AbstractOperator, du, u, ctx, t)
     throw(ArgumentError("residual! not implemented for operator type $(typeof(op))"))
 end
 
+"""
+    jacobian!(J, op, u, ctx, t) -> J
+
+Fill the Jacobian matrix `J` with ∂f/∂u for operator `op`.
+"""
 function jacobian!(J, op::AbstractOperator, u, ctx, t)
     throw(ArgumentError("jacobian! not implemented for operator type $(typeof(op))"))
 end
 
+"""
+    mass_matrix(op, ctx)
+
+Return the mass matrix for operator `op`, or `nothing` if not applicable.
+"""
 mass_matrix(op::AbstractOperator, ctx) = nothing
 
+"""
+    OperatorSum(ops)
+
+Composite operator that accumulates RHS contributions from a tuple of sub-operators.
+Only operators for which the relevant `supports_*` predicate returns `true` are called.
+"""
+struct OperatorSum{Ops} <: AbstractOperator
+    ops::Ops
+end
+
+supports_rhs(op::OperatorSum) = all(supports_rhs, op.ops)
+supports_implicit_rhs(op::OperatorSum) = all(supports_implicit_rhs, op.ops)
+supports_step(op::OperatorSum) = all(supports_step, op.ops)
+supports_residual(op::OperatorSum) = all(supports_residual, op.ops)
+
+function rhs!(du, op::OperatorSum, u, ctx, t)
+    fill!(du, zero(eltype(du)))
+
+    tmp = get!(ctx.scratch, :rhs_tmp) do
+        similar(du)
+    end
+
+    for subop in op.ops
+        supports_rhs(subop) || continue
+        fill!(tmp, zero(eltype(tmp)))
+        rhs!(tmp, subop, u, ctx, t)
+        @. du += tmp
+    end
+
+    return du
+end
+
+function implicit_rhs!(du, op::OperatorSum, u, ctx, t)
+    fill!(du, zero(eltype(du)))
+
+    tmp = get!(ctx.scratch, :implicit_rhs_tmp) do
+        similar(du)
+    end
+
+    for subop in op.ops
+        supports_implicit_rhs(subop) || continue
+        fill!(tmp, zero(eltype(tmp)))
+        implicit_rhs!(tmp, subop, u, ctx, t)
+        @. du += tmp
+    end
+
+    return du
+end
+
+"""
+    active_operators(model) -> Vector
+
+Return all non-`nothing` operator values from `model.operators`.
+"""
 function active_operators(model::SystemModel)
     return [op for op in values(model.operators) if !(op isa Nothing)]
 end

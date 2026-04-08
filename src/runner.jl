@@ -1,3 +1,9 @@
+"""
+    run_simulation(config_path) -> SimulationResult
+
+Load a TOML config file and run the simulation described by it.
+Returns a `SimulationResult` wrapping the solution.
+"""
 function run_simulation(config_path::AbstractString)
     cfg = load_config(config_path)
 

@@ -156,45 +156,62 @@ end
 
 """
     build_palioxis_trapping_model(; palioxis_model, mesh, defects, temperature,
-                                    diffusion_coefficients)
+                                    left_bc=nothing, right_bc=nothing)
 
 Build a Flopsy model backed by a real `Palioxis.MultipleDefectModel`.
 
-Requires the `Palioxis` package to be loaded (provided via the `PalioxisExt`
-package extension).  Loading `Palioxis` alongside `Flopsy` automatically
-activates the extension.
+Requires the `Palioxis` package extension (`using Palioxis` alongside `using Flopsy`).
+Diffusion coefficients are queried from Palioxis at every time step via
+`Palioxis.diffusion_constants(model, T)` — fully temperature-dependent D at no
+extra implementation cost.
 
 # Arguments
 - `palioxis_model` — a constructed `Palioxis.MultipleDefectModel`
 - `mesh`           — `Mesh1D` defining the spatial domain
-- `defects`        — `Matrix{Float64}` of shape `(n_traps, nx)` with the
-                     spatially-varying defect concentration profile.
-                     Use `Palioxis.get_defect_concentrations(model, z1, z2)`
-                     to build per-node columns.
+- `defects`        — `Matrix{Float64}` of shape `(n_traps, nx)`. Column `ix` is the
+                     defect concentration vector at node `ix`.
 - `temperature`    — an `AbstractTemperatureProvider`
-- `diffusion_coefficients` — length-`n_gas` vector (traps do not diffuse)
+- `left_bc`        — callable `f(t) -> value` for left surface concentration, or
+                     `nothing` (zero-flux / Neumann)
+- `right_bc`       — callable `f(t) -> value` for right surface concentration, or
+                     `nothing` (zero-flux / Neumann)
 """
 function build_palioxis_trapping_model end
 
 
 """
-    build_equilibrium_ic(palioxis_model, adaptor, mobile_profile, T) -> Vector{Float64}
+    build_equilibrium_ic(palioxis_model, model, mobile_profile, T) -> Vector{Float64}
 
-Build a flat initial-state vector where mobile species concentrations are set from
-`mobile_profile` and trapped species are placed at their Palioxis equilibrium values
-for temperature `T`.
+Build an initial-state vector with mobile species set from `mobile_profile` and
+trapped species at their Palioxis equilibrium values for temperature `T`.
 
-`mobile_profile` may be:
-- A `Vector{Float64}` of length `nx` (single mobile species)
-- A `Matrix{Float64}` of shape `(n_gas, nx)` (multiple mobile species)
+`mobile_profile` may be a `Vector` of length `nx` (single mobile species) or a
+`Matrix` of shape `(n_gas, nx)`.  Calls `Palioxis.set_initial_conditions` per node.
 
-Calls `Palioxis.set_initial_conditions` per spatial node.
-Requires the `Palioxis` package extension to be loaded.
-
-See also `Palioxis.calculate_steady_state!` for finding full equilibrium when
-the initial mobile/trapped split is not known a priori.
+Requires the `Palioxis` package extension.
 """
 function build_equilibrium_ic end
+
+
+"""
+    build_ic_from_total_hydrogen(palioxis_model, model, total_hydrogen, T) -> Vector{Float64}
+
+Build an initial-state vector from a total hydrogen concentration profile by finding
+the equilibrium partition between mobile and trapped species at temperature `T`.
+
+`total_hydrogen` is a `Vector` of length `nx`.  Per node:
+1. Distribute `total_hydrogen[ix]` as an initial guess across mobile and trapped DOFs.
+2. Clamp to valid bounds with `Palioxis.ensure_bounds!`.
+3. Call `Palioxis.calculate_steady_state!` to converge to the nearest equilibrium.
+
+!!! note
+    `calculate_steady_state!` does not enforce strict conservation of total hydrogen.
+    For typical TDS conditions (strong trapping at low T) the result is physically
+    accurate; verify with a mass-balance check if precision is critical.
+
+Requires the `Palioxis` package extension.
+"""
+function build_ic_from_total_hydrogen end
 
 
 # ------------------------------------------------------------------

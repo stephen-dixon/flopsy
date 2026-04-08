@@ -1,3 +1,13 @@
+"""
+    build_rd_model(; layout, mesh, reaction=nothing, diffusion=nothing,
+                     boundary=nothing, constraints=nothing, aux=Dict())
+
+Construct a `SystemModel` from a variable layout, mesh, and operator slots.
+
+Each slot may be `nothing` (omitted) or any `AbstractOperator`.  The boundary slot
+is intended for a `DirichletBoundaryOperator`; the constraints slot for a
+`ConstraintOperator` (DAE path).
+"""
 function build_rd_model(;
     layout::VariableLayout,
     mesh::Mesh1D,

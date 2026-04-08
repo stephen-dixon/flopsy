@@ -2,6 +2,17 @@
 
 Auto-generated from docstrings.  All symbols listed here are exported from `Flopsy`.
 
+## Core abstract types
+
+```@docs
+AbstractSystemModel
+AbstractOperator
+AbstractReactionOperator
+AbstractDiffusionOperator
+AbstractConstraintOperator
+AbstractFormulation
+```
+
 ## Variable layout
 
 ```@docs
@@ -9,6 +20,7 @@ VariableInfo
 VariableLayout
 nvariables
 variable_names
+has_group
 variables_in_group
 variables_with_tag
 ```
@@ -17,6 +29,13 @@ variables_with_tag
 
 ```@docs
 Mesh1D
+```
+
+## System model
+
+```@docs
+SystemContext
+SystemModel
 ```
 
 ## State vector helpers
@@ -38,25 +57,50 @@ FunctionTemperature
 temperature_at
 ```
 
+## Diffusion coefficients
+
+```@docs
+AbstractDiffusionCoefficients
+get_D
+ConstantDiffusion
+ArrheniusDiffusion
+CallableDiffusion
+```
+
 ## Operators
 
 ```@docs
 NullOperator
 OperatorSum
+active_operators
 LinearDiffusionOperator
 DirichletBoundaryOperator
 ToyReactionOperator
 SimpleTrappingReactionOperator
 ConstraintOperator
 supports_rhs
+supports_implicit_rhs
+supports_step
+supports_residual
+supports_mass_matrix
 supports_jacobian
 rhs!
+implicit_rhs!
+step!
+residual!
+jacobian!
+mass_matrix
 ```
 
 ## Formulations
 
 ```@docs
 UnsplitFormulation
+IMEXFormulation
+LieSplit
+StrangSplit
+SplitFormulation
+ResidualFormulation
 ```
 
 ## Model builders
@@ -64,6 +108,7 @@ UnsplitFormulation
 ```@docs
 build_rd_model
 build_trapping_model
+trapping_variable_layout
 ```
 
 ## Solver
@@ -83,8 +128,16 @@ build_hotgates_variable_layout
 build_hotgates_trapping_model
 build_palioxis_trapping_model
 build_equilibrium_ic
+build_ic_from_total_hydrogen
 FakeHotgatesModel
 hotgates_rates!
+```
+
+## Runner
+
+```@docs
+load_config
+run_simulation
 ```
 
 ## Output
@@ -100,4 +153,6 @@ build_summary_dataframe
 write_field_output_hdf5
 write_summary_csv
 load_ic_from_hdf5
+print_run_banner
+solver_stats_dict
 ```

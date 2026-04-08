@@ -17,6 +17,7 @@ include("state.jl")
 include("mesh.jl")
 include("config.jl")
 include("temperature.jl")
+include("diffusion_coefficients.jl")
 
 include("operators/operators.jl")
 include("operators/reaction.jl")
@@ -88,6 +89,12 @@ export
     OperatorSum,
     active_operators,
 
+    AbstractDiffusionCoefficients,
+    get_D,
+    ConstantDiffusion,
+    ArrheniusDiffusion,
+    CallableDiffusion,
+
     LinearDiffusionOperator,
     DirichletBoundaryOperator,
     ToyReactionOperator,
@@ -136,6 +143,7 @@ export
     build_hotgates_trapping_model,
     build_palioxis_trapping_model,
     build_equilibrium_ic,
+    build_ic_from_total_hydrogen,
 
     FakeHotgatesModel,
     hotgates_rates!

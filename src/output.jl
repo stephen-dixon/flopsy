@@ -2,6 +2,15 @@ using CSV
 using DataFrames
 using HDF5
 
+"""
+    wrap_result(model, sol, config; summaries=Dict(), metadata=Dict()) -> SimulationResult
+
+Wrap a SciML solution object together with the model, configuration, and optional
+summary/metadata dicts into a `SimulationResult`.
+
+`summaries` may contain a `:extra_timeseries` key mapping string names to
+`Vector{Float64}` — these appear as additional columns in the summary CSV.
+"""
 function wrap_result(model::SystemModel, sol, config;
     summaries::Dict{Symbol,Any}=Dict{Symbol,Any}(),
     metadata::Dict{String,Any}=Dict{String,Any}(),
@@ -275,6 +284,11 @@ function load_ic_from_hdf5(
 end
 
 
+"""
+    print_run_banner(config, solver_config, model)
+
+Print a human-readable summary of the simulation setup to stdout.
+"""
 function print_run_banner(config, solver_config::SolverConfig, model::SystemModel)
     println("============================================================")
     println("Flopsy simulation start")
@@ -319,6 +333,12 @@ function library_versions()
     )
 end
 
+"""
+    solver_stats_dict(result) -> Dict{String,Any}
+
+Extract solver statistics from the SciML solution into a plain dictionary
+(number of steps, function evaluations, etc.).
+"""
 function solver_stats_dict(result::SimulationResult)
     sol = result.solution
     stats = Dict{String,Any}()
