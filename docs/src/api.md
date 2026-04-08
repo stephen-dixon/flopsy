@@ -115,6 +115,8 @@ trapping_variable_layout
 
 ```@docs
 SolverConfig
+SplitProblem
+SplitSolution
 build_problem
 solve_problem
 ```
@@ -138,6 +140,15 @@ hotgates_rates!
 ```@docs
 load_config
 run_simulation
+```
+
+## Plotting
+
+```@docs
+plot_tds_flux
+plot_spatial_snapshot
+plot_spatial_evolution
+record_spatial_video
 ```
 
 ## Output

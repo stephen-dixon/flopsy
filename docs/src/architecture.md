@@ -156,14 +156,72 @@ ODEFunction(f!, jac = jac!, jac_prototype = sparse_prototype)
 The sparse prototype is built from the known structure: dense within-node blocks (reaction
 coupling) plus tridiagonal off-diagonals (diffusion coupling).
 
-### Other Formulations (Stubs)
+### IMEX splitting
 
-- `IMEXFormulation` — separate explicit and implicit parts for semi-implicit integration.
-- `SplitFormulation` / `LieSplit` / `StrangSplit` — operator-split time stepping.
-- `ResidualFormulation` — residual-based DAE path.
+Partitions the operator set into a *stiff implicit* part (diffusion + boundary operators)
+and a *non-stiff explicit* part (reaction operators).  Assembles a `SplitODEProblem` for
+use with IMEX algorithms such as `KenCarp4()`.
 
-These are scaffolded and will be implemented in a future pass.  Production simulations
-should use `UnsplitFormulation`.
+Useful when the stiff timescales come primarily from diffusion and the reaction step is
+cheap to handle explicitly.
+
+```julia
+config = SolverConfig(
+    formulation = IMEXFormulation(),
+    algorithm   = KenCarp4(),
+    abstol = 1e-9, reltol = 1e-7,
+)
+```
+
+### Operator splitting
+
+Explicit operator-splitting loop with a fixed macro-step size `dt`.  Two schemes are
+available:
+
+- **`LieSplit`** (first-order): reaction → diffusion per macro-step.
+- **`StrangSplit`** (second-order): half reaction → full diffusion → half reaction.
+
+Each sub-step is solved independently as its own ODE using the configured algorithm.
+Because sub-step `ODEFunction`s have no analytic Jacobian, use an algorithm that accepts
+finite-difference differentiation, e.g. `Rodas5(autodiff=AutoFiniteDiff())`.
+
+`solver_config.dt` **must** be set; it controls the splitting macro-step.
+
+```julia
+config = SolverConfig(
+    formulation = SplitFormulation(StrangSplit()),
+    algorithm   = Rodas5(autodiff = AutoFiniteDiff()),
+    dt          = 2.0,           # macro-step size (seconds)
+    abstol = 1e-9, reltol = 1e-7,
+)
+```
+
+`build_problem` returns a `SplitProblem`; `solve_problem` executes the splitting loop and
+returns a `SplitSolution`.  Both expose `.t` and `.u` fields so they are compatible with
+all Flopsy output helpers.
+
+### DAE / residual formulation
+
+DAE path using a singular mass matrix.  Variables in the `:trap` group receive a zero
+diagonal in the mass matrix (algebraic rows), enforcing quasi-static trap equilibrium.
+All other variables are standard ODE rows.
+
+Use a DAE-capable algorithm such as `Rodas5P()`.
+
+```julia
+config = SolverConfig(
+    formulation = ResidualFormulation(),
+    algorithm   = Rodas5P(),
+    abstol = 1e-9, reltol = 1e-7,
+)
+```
+
+!!! note
+    `ResidualFormulation` is a *different physical model* from `UnsplitFormulation`.
+    Differences in the solution reflect the quasi-static approximation, not solver error.
+    It is appropriate only when trapping kinetics are fast relative to diffusion.
+
+See **[Formulations](formulations.md)** for a full comparison with worked examples.
 
 ## SystemModel and SystemContext
 

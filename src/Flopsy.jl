@@ -45,6 +45,7 @@ include("adapters/hotgates.jl")
 include("progress.jl")
 include("runner.jl")
 include("output.jl")
+include("plotting.jl")
 
 export
     AbstractSystemModel,
@@ -150,5 +151,10 @@ export
     build_ic_from_total_hydrogen,
 
     FakeHotgatesModel,
-    hotgates_rates!
+    hotgates_rates!,
+
+    plot_tds_flux,
+    plot_spatial_snapshot,
+    plot_spatial_evolution,
+    record_spatial_video
 end

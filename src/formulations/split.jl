@@ -1,9 +1,41 @@
 """
     SplitProblem
 
-Internal problem type returned by `build_problem` for `SplitFormulation`.
-Holds the model, initial condition, time span, and solver configuration so that
-`solve_problem` can execute the splitting loop.
+Problem container returned by `build_problem` for [`SplitFormulation`](@ref).
+Holds everything needed to execute the operator-splitting loop in `solve_problem`.
+
+# Fields
+- `model::SystemModel` — the assembled reaction-diffusion model.
+- `u0::Vector{Float64}` — initial state vector (flat, length `nvars * nx`).
+- `tspan::Tuple{Float64,Float64}` — `(t0, t_end)` integration interval.
+- `solver_config::SolverConfig` — solver settings; **`solver_config.dt` must be set**
+  to control the splitting macro-step size.
+
+# Usage
+
+```julia
+using Flopsy, OrdinaryDiffEq, ADTypes
+
+config = SolverConfig(
+    formulation = SplitFormulation(StrangSplit()),
+    algorithm   = Rodas5(autodiff = AutoFiniteDiff()),
+    dt          = 2.0,      # macro-step size (seconds)
+    abstol      = 1e-9,
+    reltol      = 1e-7,
+    saveat      = collect(0.0:10.0:200.0),
+)
+
+prob   = build_problem(model, u0, (0.0, 200.0), config)   # returns SplitProblem
+sol    = solve_problem(prob, config)                        # returns SplitSolution
+result = wrap_result(model, sol, config)
+```
+
+Each macro-step calls `solve_problem` on the reaction and diffusion sub-ODEs
+independently using the configured algorithm.  Sub-step `ODEFunction`s do not carry
+an analytic Jacobian, so use `Rodas5(autodiff=AutoFiniteDiff())` rather than a
+ForwardDiff-based variant to avoid type conflicts with pre-allocated scratch buffers.
+
+See also `SplitSolution`, `SplitFormulation`.
 """
 struct SplitProblem
     model::SystemModel
