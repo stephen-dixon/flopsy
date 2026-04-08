@@ -1,6 +1,7 @@
 module Flopsy
 
 using LinearAlgebra
+using ADTypes
 using TOML
 using SciMLBase
 using OrdinaryDiffEq
@@ -42,7 +43,6 @@ include("progress.jl")
 include("runner.jl")
 include("output.jl")
 
-export
 export
     AbstractSystemModel,
     AbstractOperator,
@@ -120,5 +120,5 @@ export
     write_field_output_hdf5,
     write_summary_csv,
     print_run_banner,
-    solver_stats_dict,
+    solver_stats_dict
 end

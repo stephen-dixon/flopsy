@@ -43,7 +43,7 @@ function run_simulation(config_path::AbstractString)
         "nx" => model.context.nx,
         "nvariables" => nvariables(model.layout),
         "retcode" => string(sol.retcode),
-        "elapsed_walltime_s" => elapsed
+        "elapsed_walltime_s" => elapsed_time
     )
 
     summaries = Dict{Symbol,Any}()
@@ -124,9 +124,10 @@ end
 
 function _build_algorithm(cfg)
     alg = get(cfg, "algorithm", "Rodas5")
+    # alg = get(cfg, "algorithm", "Rodas5")
 
     if alg == "Rodas5"
-        return Rodas5()
+        return Rodas5(autodiff = AutoFiniteDiff())
     elseif alg == "CVODE_BDF"
         return Sundials.CVODE_BDF()
     else
