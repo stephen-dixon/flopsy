@@ -14,12 +14,13 @@ function run_simulation(config_path::AbstractString)
         build_toy_rd_model(cfg, mesh)
     elseif model_type == "toy_trapping"
         build_toy_trapping_model(cfg, mesh)
+    elseif model_type == "fake_hotgates_trapping"
+        build_fake_hotgates_trapping_model(cfg, mesh)
     else
         throw(ArgumentError("Unknown model_type: $model_type"))
     end
 
     u0 = build_initial_state(cfg, model)
-
     algorithm = _build_algorithm(cfg)
 
     solver_config = SolverConfig(
@@ -133,4 +134,31 @@ function _build_algorithm(cfg)
     else
         throw(ArgumentError("Unknown algorithm: $alg"))
     end
+end
+
+
+function build_fake_hotgates_trapping_model(cfg, mesh::Mesh1D)
+    k_trap = get(cfg, "k_trap", 5.0)
+    k_detrap = get(cfg, "k_detrap", 0.5)
+    diffusion_coefficient = get(cfg, "diffusion_coefficient", 0.01)
+    temperature = get(cfg, "temperature", 300.0)
+
+    backend = FakeHotgatesModel(k_trap, k_detrap)
+
+    adaptor = HotgatesTrappingAdaptor(
+        [1],               # mobile indices in local Flopsy state
+        [2],               # trap indices in local Flopsy state
+        ["c"],
+        ["theta"],
+    )
+
+    diffusion_coeffs = [diffusion_coefficient, 0.0]
+
+    return build_hotgates_trapping_model(
+        mesh = mesh,
+        model = backend,
+        adaptor = adaptor,
+        temperature = ConstantTemperature(temperature),
+        diffusion_coefficients = diffusion_coeffs,
+    )
 end

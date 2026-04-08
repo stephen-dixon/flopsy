@@ -120,5 +120,17 @@ export
     write_field_output_hdf5,
     write_summary_csv,
     print_run_banner,
-    solver_stats_dict
+    solver_stats_dict,
+
+        AbstractTemperatureProvider,
+    ConstantTemperature,
+    temperature_at,
+
+    HotgatesTrappingAdaptor,
+    HotgatesReactionOperator,
+    build_hotgates_variable_layout,
+    build_hotgates_trapping_model,
+
+    FakeHotgatesModel,
+    hotgates_rates!
 end
