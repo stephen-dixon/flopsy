@@ -1,10 +1,20 @@
 # ---------------------------------------------------------------------------
-# Internal helper — evaluate D for one variable at the current temperature.
+# Internal helper — evaluate D for one variable at a node and temperature.
 # Dispatch handles both plain vectors (constant) and AbstractDiffusionCoefficients.
+# The ix argument is passed through for future spatially-varying D support;
+# all current implementations ignore it.
 # ---------------------------------------------------------------------------
 
-_eval_D(coeffs::AbstractVector{<:Real}, ivar::Int, T) = Float64(coeffs[ivar])
-_eval_D(coeffs::AbstractDiffusionCoefficients, ivar::Int, T) = get_D(coeffs, ivar, T)
+_eval_D(coeffs::AbstractVector{<:Real}, ivar::Int, ix::Int, T) = Float64(coeffs[ivar])
+_eval_D(coeffs::AbstractDiffusionCoefficients, ivar::Int, ix::Int, T) = get_D(coeffs, ivar, ix, T)
+
+
+# ---------------------------------------------------------------------------
+# Helper — variable indices that this operator couples spatially (inter-node).
+# Used by build_unsplit_problem to construct the Jacobian sparsity pattern.
+# ---------------------------------------------------------------------------
+
+diffusion_variable_indices(::AbstractOperator, layout) = Int[]
 
 
 # ---------------------------------------------------------------------------
@@ -43,6 +53,9 @@ LinearDiffusionOperator(coefficients, selector, bc) =
     LinearDiffusionOperator(coefficients, selector, bc, nothing)
 
 supports_rhs(::LinearDiffusionOperator) = true
+supports_jacobian(::LinearDiffusionOperator) = true
+
+diffusion_variable_indices(op::LinearDiffusionOperator, layout) = op.selector(layout)
 
 function rhs!(du, op::LinearDiffusionOperator, u, ctx::SystemContext, t)
     layout = ctx.layout
@@ -59,7 +72,7 @@ function rhs!(du, op::LinearDiffusionOperator, u, ctx::SystemContext, t)
     vars = op.selector(layout)
 
     @inbounds for ivar in vars
-        D = _eval_D(op.coefficients, ivar, T_val)
+        D = _eval_D(op.coefficients, ivar, 1, T_val)
 
         dU[ivar, 1] += D * (U[ivar, 2] - U[ivar, 1]) * invdx2
 
@@ -71,6 +84,43 @@ function rhs!(du, op::LinearDiffusionOperator, u, ctx::SystemContext, t)
     end
 
     return du
+end
+
+function jacobian!(J, op::LinearDiffusionOperator, u, ctx::SystemContext, t)
+    layout = ctx.layout
+    nx     = ctx.nx
+    dx     = ctx.mesh.dx
+    invdx2 = inv(dx * dx)
+    nvars  = nvariables(layout)
+
+    T_val = op.temperature !== nothing ?
+        Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
+
+    vars = op.selector(layout)
+
+    @inbounds for ivar in vars
+        D = _eval_D(op.coefficients, ivar, 1, T_val)
+
+        # Node 1 — one-sided Neumann stencil: dU[ivar,1] += D*(U[2]-U[1])*invdx²
+        r = ivar
+        J[r, r]          += -D * invdx2
+        J[r, r + nvars]  +=  D * invdx2
+
+        # Interior nodes
+        for ix in 2:(nx - 1)
+            r = (ix - 1) * nvars + ivar
+            J[r, r - nvars] +=  D * invdx2
+            J[r, r]         += -2 * D * invdx2
+            J[r, r + nvars] +=  D * invdx2
+        end
+
+        # Node nx — one-sided Neumann stencil
+        r = (nx - 1) * nvars + ivar
+        J[r, r - nvars] +=  D * invdx2
+        J[r, r]         += -D * invdx2
+    end
+
+    return J
 end
 
 
@@ -108,16 +158,6 @@ boundary = DirichletBoundaryOperator(
 )
 ```
 
-# TDS usage — implantation then desorption in one run
-
-```julia
-boundary = DirichletBoundaryOperator(
-    selector, diffusion_coefficients, temperature;
-    left  = t -> t < t_implant ? surface_conc(t) : 0.0,
-    right = t -> 0.0,
-)
-```
-
 !!! note
     Set the initial condition at boundary nodes to match `left(0)` / `right(0)` to
     avoid a step discontinuity at t = 0.
@@ -136,6 +176,9 @@ function DirichletBoundaryOperator(selector, coefficients, temperature=nothing;
 end
 
 supports_rhs(::DirichletBoundaryOperator) = true
+supports_jacobian(::DirichletBoundaryOperator) = true
+
+diffusion_variable_indices(op::DirichletBoundaryOperator, layout) = op.selector(layout)
 
 function rhs!(du, op::DirichletBoundaryOperator, u, ctx::SystemContext, t)
     layout = ctx.layout
@@ -152,7 +195,7 @@ function rhs!(du, op::DirichletBoundaryOperator, u, ctx::SystemContext, t)
     vars = op.selector(layout)
 
     @inbounds for ivar in vars
-        D = _eval_D(op.coefficients, ivar, T_val)
+        D = _eval_D(op.coefficients, ivar, 1, T_val)
 
         if op.left !== nothing
             g = op.left(t)
@@ -166,4 +209,83 @@ function rhs!(du, op::DirichletBoundaryOperator, u, ctx::SystemContext, t)
     end
 
     return du
+end
+
+function jacobian!(J, op::DirichletBoundaryOperator, u, ctx::SystemContext, t)
+    layout = ctx.layout
+    nx     = ctx.nx
+    dx     = ctx.mesh.dx
+    invdx2 = inv(dx * dx)
+    nvars  = nvariables(layout)
+
+    T_val = op.temperature !== nothing ?
+        Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
+
+    vars = op.selector(layout)
+
+    @inbounds for ivar in vars
+        D = _eval_D(op.coefficients, ivar, 1, T_val)
+
+        if op.left !== nothing
+            r = ivar   # node 1
+            J[r, r] += -D * invdx2
+        end
+
+        if op.right !== nothing
+            r = (nx - 1) * nvars + ivar   # node nx
+            J[r, r] += -D * invdx2
+        end
+    end
+
+    return J
+end
+
+
+# ---------------------------------------------------------------------------
+# Surface flux computation — dispatched on diffusion operator type
+# ---------------------------------------------------------------------------
+
+"""
+    surface_fluxes(op, result) -> Dict{Symbol, NamedTuple}
+
+Compute outward diffusive fluxes at both domain boundaries for each diffusing
+variable over all saved times.  Dispatches on the concrete operator type.
+
+Default returns an empty `Dict`.  Implement for concrete `AbstractDiffusionOperator`
+subtypes to enable flux reporting.
+"""
+surface_fluxes(::AbstractDiffusionOperator, result) = Dict{Symbol, NamedTuple}()
+
+function surface_fluxes(op::LinearDiffusionOperator, result::SimulationResult)
+    model  = result.model
+    layout = model.layout
+    mesh   = model.context.mesh
+    dx     = mesh.dx
+    nx     = model.context.nx
+    vars   = op.selector(layout)
+    names  = variable_names(layout)
+    nt     = length(result.solution.u)
+    ctx    = model.context
+
+    out = Dict{Symbol, NamedTuple}()
+
+    for ivar in vars
+        left_flux  = zeros(Float64, nt)
+        right_flux = zeros(Float64, nt)
+
+        for it in 1:nt
+            t     = result.solution.t[it]
+            T_val = op.temperature !== nothing ?
+                Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
+            D = _eval_D(op.coefficients, ivar, 1, T_val)
+
+            U = state_view(result.solution.u[it], layout, nx)
+            left_flux[it]  = D * (U[ivar, 2]      - U[ivar, 1])  / dx
+            right_flux[it] = D * (U[ivar, nx - 1] - U[ivar, nx]) / dx
+        end
+
+        out[names[ivar]] = (left = left_flux, right = right_flux)
+    end
+
+    return out
 end

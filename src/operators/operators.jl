@@ -93,55 +93,6 @@ Return the mass matrix for operator `op`, or `nothing` if not applicable.
 mass_matrix(op::AbstractOperator, ctx) = nothing
 
 """
-    OperatorSum(ops)
-
-Composite operator that accumulates RHS contributions from a tuple of sub-operators.
-Only operators for which the relevant `supports_*` predicate returns `true` are called.
-"""
-struct OperatorSum{Ops} <: AbstractOperator
-    ops::Ops
-end
-
-supports_rhs(op::OperatorSum) = all(supports_rhs, op.ops)
-supports_implicit_rhs(op::OperatorSum) = all(supports_implicit_rhs, op.ops)
-supports_step(op::OperatorSum) = all(supports_step, op.ops)
-supports_residual(op::OperatorSum) = all(supports_residual, op.ops)
-
-function rhs!(du, op::OperatorSum, u, ctx, t)
-    fill!(du, zero(eltype(du)))
-
-    tmp = get!(ctx.scratch, :rhs_tmp) do
-        similar(du)
-    end
-
-    for subop in op.ops
-        supports_rhs(subop) || continue
-        fill!(tmp, zero(eltype(tmp)))
-        rhs!(tmp, subop, u, ctx, t)
-        @. du += tmp
-    end
-
-    return du
-end
-
-function implicit_rhs!(du, op::OperatorSum, u, ctx, t)
-    fill!(du, zero(eltype(du)))
-
-    tmp = get!(ctx.scratch, :implicit_rhs_tmp) do
-        similar(du)
-    end
-
-    for subop in op.ops
-        supports_implicit_rhs(subop) || continue
-        fill!(tmp, zero(eltype(tmp)))
-        implicit_rhs!(tmp, subop, u, ctx, t)
-        @. du += tmp
-    end
-
-    return du
-end
-
-"""
     active_operators(model) -> Vector
 
 Return all non-`nothing` operator values from `model.operators`.

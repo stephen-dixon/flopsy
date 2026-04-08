@@ -1,33 +1,37 @@
 """
     AbstractDiffusionCoefficients
 
-Abstract type for objects that supply diffusion coefficients per variable and
-temperature.  Implement `get_D(coefficients, ivar, T)`.
+Abstract type for objects that supply diffusion coefficients per variable,
+node, and temperature.  Implement `get_D(coefficients, ivar, ix, T)`.
 
 Used by `LinearDiffusionOperator` and `DirichletBoundaryOperator` to support
 constant, Arrhenius, callable, and external-library (e.g. Palioxis) coefficients
 within the same operator interface.
 
 Concrete types:
-- `ConstantDiffusion`  — fixed values independent of temperature
-- `ArrheniusDiffusion` — D(T) = D₀ exp(−Eₐ / kBT)
-- `CallableDiffusion`  — one callable `f(T)` per variable
+- `ConstantDiffusion`  — fixed values independent of position and temperature
+- `ArrheniusDiffusion` — D(T) = D₀ exp(−Eₐ / kBT), spatially uniform
+- `CallableDiffusion`  — one callable `f(T)` per variable, spatially uniform
 """
 abstract type AbstractDiffusionCoefficients end
 
 
 """
-    get_D(coefficients, ivar, T) -> Float64
+    get_D(coefficients, ivar, ix, T) -> Float64
 
-Return the diffusion coefficient for variable index `ivar` at temperature `T` (Kelvin).
+Return the diffusion coefficient for variable index `ivar` at spatial node `ix`
+and temperature `T` (Kelvin).
 
 Dispatches on the concrete type of `coefficients`.  For `AbstractVector{<:Real}`,
-the value is returned directly (constant, T is ignored).
+the value is returned directly (constant: both `ix` and `T` are ignored).
+
+The `ix` argument is reserved for future spatially-varying diffusion models.
+All current concrete types ignore it.
 """
 function get_D end
 
-# Plain vector fallback — constant coefficients, T is ignored.
-get_D(coeffs::AbstractVector{<:Real}, ivar::Int, T) = Float64(coeffs[ivar])
+# Plain vector fallback — constant coefficients, ix and T are ignored.
+get_D(coeffs::AbstractVector{<:Real}, ivar::Int, ix::Int, T) = Float64(coeffs[ivar])
 
 
 # ---------------------------------------------------------------------------
@@ -35,7 +39,8 @@ get_D(coeffs::AbstractVector{<:Real}, ivar::Int, T) = Float64(coeffs[ivar])
 """
     ConstantDiffusion(values)
 
-Temperature-independent diffusion coefficients.  `values[ivar]` is used directly.
+Temperature-independent, spatially-uniform diffusion coefficients.
+`values[ivar]` is used directly regardless of position or temperature.
 
 Equivalent to passing a plain `Vector{Float64}` to `LinearDiffusionOperator`, but
 allows mixing with other `AbstractDiffusionCoefficients` types in operator trees.
@@ -44,7 +49,7 @@ struct ConstantDiffusion{T<:Real} <: AbstractDiffusionCoefficients
     values::Vector{T}
 end
 
-get_D(c::ConstantDiffusion, ivar::Int, T) = Float64(c.values[ivar])
+get_D(c::ConstantDiffusion, ivar::Int, ix::Int, T) = Float64(c.values[ivar])
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +65,7 @@ Arrhenius temperature-dependent diffusion:
 - `Ea` — activation energies [eV], one per variable
 - `kb` — Boltzmann constant [eV/K] (default: 8.617333 × 10⁻⁵ eV/K)
 
-`T` must be in Kelvin.
+`T` must be in Kelvin.  The coefficient is spatially uniform (same at every node).
 
 # Example
 ```julia
@@ -81,7 +86,8 @@ function ArrheniusDiffusion(D0::AbstractVector{T}, Ea::AbstractVector{T};
     ArrheniusDiffusion(collect(T, D0), collect(T, Ea), kb)
 end
 
-get_D(c::ArrheniusDiffusion, ivar::Int, T::Real) = c.D0[ivar] * exp(-c.Ea[ivar] / (c.kb * T))
+get_D(c::ArrheniusDiffusion, ivar::Int, ix::Int, T::Real) =
+    c.D0[ivar] * exp(-c.Ea[ivar] / (c.kb * T))
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +99,7 @@ Diffusion coefficients given by one callable per variable.  Each element of `fun
 must be a callable `f(T::Real) -> Float64`.
 
 Useful for arbitrary analytic expressions or lookup-table interpolations.
+The coefficient is spatially uniform (the callable receives only `T`, not `ix`).
 
 # Example
 ```julia
@@ -106,4 +113,4 @@ struct CallableDiffusion{F} <: AbstractDiffusionCoefficients
     funcs::Vector{F}
 end
 
-get_D(c::CallableDiffusion, ivar::Int, T::Real) = Float64(c.funcs[ivar](T))
+get_D(c::CallableDiffusion, ivar::Int, ix::Int, T::Real) = Float64(c.funcs[ivar](T))

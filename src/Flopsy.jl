@@ -1,6 +1,7 @@
 module Flopsy
 
 using LinearAlgebra
+using SparseArrays
 using ADTypes
 using TOML
 using SciMLBase

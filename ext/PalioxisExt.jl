@@ -25,7 +25,7 @@ struct PalioxisDiffusionCoefficients <: Flopsy.AbstractDiffusionCoefficients
     model::Palioxis.MultipleDefectModel
 end
 
-function Flopsy.get_D(c::PalioxisDiffusionCoefficients, ivar::Int, T::Real)
+function Flopsy.get_D(c::PalioxisDiffusionCoefficients, ivar::Int, ix::Int, T::Real)
     return Palioxis.diffusion_constants(c.model, T)[ivar]
 end
 

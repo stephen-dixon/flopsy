@@ -97,39 +97,13 @@ Sign convention: **positive in the direction of the outward-facing normal**.
 Both are positive during TDS desorption where the surface concentration is lower than
 the bulk (vacuum boundary conditions), giving a positive outward flux at both faces.
 
-Returns an empty Dict if no `LinearDiffusionOperator` is present in the model.
+Returns an empty `Dict` if the model has no diffusion operator, or if the operator
+type does not implement `surface_fluxes`.
 """
 function surface_diffusive_fluxes(result::SimulationResult)
-    model = result.model
-    diffop = model.operators.diffusion
-
-    diffop isa LinearDiffusionOperator || return Dict{Symbol,NamedTuple}()
-
-    layout = model.layout
-    mesh = model.context.mesh
-    dx = mesh.dx
-    nx = model.context.nx
-    vars = diffop.selector(layout)
-    names = variable_names(layout)
-    nt = length(result.solution.u)
-
-    out = Dict{Symbol,NamedTuple}()
-
-    for ivar in vars
-        D = diffop.coefficients[ivar]
-        left_flux  = zeros(Float64, nt)
-        right_flux = zeros(Float64, nt)
-
-        for it in 1:nt
-            U = state_view(result.solution.u[it], layout, nx)
-            left_flux[it]  =  D * (U[ivar, 2]    - U[ivar, 1])    / dx
-            right_flux[it] =  D * (U[ivar, nx-1] - U[ivar, nx])   / dx
-        end
-
-        out[names[ivar]] = (left = left_flux, right = right_flux)
-    end
-
-    return out
+    diffop = result.model.operators.diffusion
+    diffop === nothing && return Dict{Symbol, NamedTuple}()
+    return surface_fluxes(diffop, result)
 end
 
 
@@ -326,7 +300,7 @@ end
 function library_versions()
     return Dict(
         "julia_version"         => string(VERSION),
-        "flopsy_version"        => "0.1.0-dev",
+        "flopsy_version"        => string(pkgversion(@__MODULE__)),
         "scimlbase_loaded"      => isdefined(Main, :SciMLBase) || isdefined(Flopsy, :SciMLBase),
         "ordinarydiffeq_loaded" => isdefined(Main, :OrdinaryDiffEq) || isdefined(Flopsy, :OrdinaryDiffEq),
         "sundials_loaded"       => isdefined(Main, :Sundials) || isdefined(Flopsy, :Sundials),
