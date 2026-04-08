@@ -45,3 +45,11 @@ Base.@kwdef struct SolverConfig
     write_convergence_trace::Bool = false
     kwargs::Dict{Symbol,Any} = Dict{Symbol,Any}()
 end
+
+struct SimulationResult{M,S,C}
+    model::M
+    solution::S
+    config::C
+    summaries::Dict{Symbol,Any}
+    metadata::Dict{String,Any}
+end

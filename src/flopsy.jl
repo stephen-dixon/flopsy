@@ -110,4 +110,15 @@ export
     run_simulation,
 
     HotgatesReactionOperator
+
+    SimulationResult,
+    wrap_result,
+    variable_timeseries,
+    variable_snapshot,
+    integrated_variable,
+    build_summary_dataframe,
+    write_field_output_hdf5,
+    write_summary_csv,
+    print_run_banner,
+    solver_stats_dict,
 end

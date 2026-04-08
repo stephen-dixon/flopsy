@@ -20,15 +20,44 @@ function run_simulation(config_path::AbstractString)
 
     u0 = build_initial_state(cfg, model)
 
+    algorithm = _build_algorithm(cfg)
+
     solver_config = SolverConfig(
         formulation = UnsplitFormulation(),
-        algorithm = Rodas5(),
+        algorithm = algorithm,
         abstol = get(cfg, "abstol", 1e-8),
         reltol = get(cfg, "reltol", 1e-6),
         saveat = get(cfg, "saveat", nothing),
     )
 
-    return solve_problem(model, u0, tspan, solver_config)
+    print_run_banner(cfg, solver_config, model)
+
+    t_start = time()
+    sol = solve_problem(model, u0, tspan, solver_config)
+    elapsed_time = time() - t_start
+
+    metadata = Dict{String,Any}(
+        "model_type" => model_type,
+        "algorithm" => string(typeof(algorithm)),
+        "formulation" => string(typeof(solver_config.formulation)),
+        "nx" => model.context.nx,
+        "nvariables" => nvariables(model.layout),
+        "retcode" => string(sol.retcode),
+        "elapsed_walltime_s" => elapsed
+    )
+
+    summaries = Dict{Symbol,Any}()
+
+    # mock example of an extra derived timeseries for trapping-like runs
+    if nvariables(model.layout) >= 2
+        summaries[:extra_timeseries] = Dict(
+            "integral_total_inventory" =>
+                integrated_variable(wrap_result(model, sol, cfg), 1) .+
+                integrated_variable(wrap_result(model, sol, cfg), 2)
+        )
+    end
+
+    return wrap_result(model, sol, cfg; summaries=summaries, metadata=metadata)
 end
 
 
@@ -90,4 +119,17 @@ function build_initial_state(cfg, model::SystemModel)
     end
 
     return u0
+end
+
+
+function _build_algorithm(cfg)
+    alg = get(cfg, "algorithm", "Rodas5")
+
+    if alg == "Rodas5"
+        return Rodas5()
+    elseif alg == "CVODE_BDF"
+        return Sundials.CVODE_BDF()
+    else
+        throw(ArgumentError("Unknown algorithm: $alg"))
+    end
 end
