@@ -15,6 +15,6 @@ makedocs(
 )
 
 deploydocs(
-    repo = "github.com/palioxis-tds/flopsy.git",
+    repo = "github.com/stephen-dixon/flopsy.git",
     devbranch = "main",
 )
