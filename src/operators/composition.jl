@@ -1,3 +1,16 @@
+"""
+    OperatorSum(ops)
+
+Composite operator that accumulates contributions from a tuple of sub-operators.
+
+For each capability (`rhs!`, `jacobian!`, etc.) only sub-operators for which the
+corresponding `supports_*` predicate returns `true` are called.  `supports_jacobian`
+returns `true` only when **all** sub-operators support it, ensuring the assembled
+Jacobian is complete.
+
+`OperatorSum` is used internally by `build_unsplit_problem` to combine a model's
+active operators into a single callable.  Users rarely need to construct it directly.
+"""
 struct OperatorSum{Ops} <: AbstractOperator
     ops::Ops
 end

@@ -85,7 +85,10 @@ The extension is triggered automatically by importing `Palioxis` and connects Fl
 
 ### Building a Palioxis Trapping Model
 
-The extension exposes `build_palioxis_trapping_model`, which constructs a complete Flopsy `SystemModel` backed by a `Palioxis.MultipleDefectModel`:
+The extension exposes `build_palioxis_trapping_model`, which constructs a complete Flopsy
+`SystemModel` backed by a `Palioxis.MultipleDefectModel`.  Diffusion coefficients are
+queried automatically from Palioxis at every time step via
+`Palioxis.diffusion_constants(model, T)` — no separate `D` array is needed.
 
 ```julia
 using Flopsy
@@ -94,25 +97,23 @@ using Palioxis
 # Create a Palioxis model with defect parameters
 palioxis_model = Palioxis.MultipleDefectModel(...)
 
-# Define spatial mesh
-mesh = Mesh1D(0.0, 1e-3, 100)
+# Define spatial mesh: domain length and number of nodes
+mesh = Mesh1D(1e-3, 100)   # 1 mm domain, 100 nodes
 
 # Spatially-varying defect profile (n_traps × nx)
-defects = ...  # build using Palioxis.get_defect_concentrations per node
+defects = fill(1e-3, palioxis_model.n_traps, 100)  # uniform ρ = 1e-3
 
 # Temperature provider
-T_provider = LinearRampTemperature(T0=300.0, ramp_rate=1.0)
+T_provider = LinearRampTemperature(300.0, 10.0 / 60.0)  # 300 K, 10 K/min ramp
 
-# Diffusion coefficients (one per mobile species, zeros for traps)
-D = [1e-8, 1e-8]  # m²/s
-
-# Build the model
+# Build the model — D(T) is sourced from Palioxis automatically
 model = build_palioxis_trapping_model(
-    palioxis_model=palioxis_model,
-    mesh=mesh,
-    defects=defects,
-    temperature=T_provider,
-    diffusion_coefficients=D,
+    palioxis_model = palioxis_model,
+    mesh           = mesh,
+    defects        = defects,
+    temperature    = T_provider,
+    left_bc        = t -> 0.0,   # vacuum at left surface
+    right_bc       = t -> 0.0,   # vacuum at right surface
 )
 ```
 
@@ -120,12 +121,18 @@ The model is immediately ready to use with Flopsy's solver infrastructure.
 
 ### Further Palioxis Capabilities
 
-The Palioxis library offers capabilities beyond basic rate computations, all accessible through the `palioxis_model` handle:
+The Palioxis library offers capabilities beyond basic rate computations, all accessible
+through the `palioxis_model` handle:
 
-- **Jacobians** — `Palioxis.time_derivatives_jacobian` computes sensitivities of rates with respect to mobile and trapped concentrations. This enables efficient implicit solving.
-- **Retention integrals** — `Palioxis.retention` and `Palioxis.noneq_retention` compute the cumulative hydrogen uptake (moles per unit area) from a constant flux boundary condition. Useful for comparison with permeation experiments.
+- **Temperature-dependent D** — `PalioxisDiffusionCoefficients` (created internally by
+  `build_palioxis_trapping_model`) calls `Palioxis.diffusion_constants(model, T)` at every
+  time step.  D is always consistent with the current temperature and model parameters.
+- **Retention integrals** — `Palioxis.retention` and `Palioxis.noneq_retention` compute
+  cumulative hydrogen uptake from a constant flux boundary condition.
 - **Equilibrium initial conditions** — see the next section.
-- **Temperature sensitivity** — Palioxis models temperature through standard Arrhenius factors. Any temperature profile can be passed at each time step, allowing thermal transients to be captured.
+- **Temperature sensitivity** — Palioxis uses Arrhenius factors internally; any temperature
+  profile passed through the `AbstractTemperatureProvider` interface is evaluated per time
+  step and per node.
 
 ## Equilibrium Initial Conditions
 
@@ -139,21 +146,37 @@ using Palioxis
 mobile_profile = zeros(nx)  # or a prescribed profile
 
 # Compute trapped equilibrium at temperature T
-u0 = build_equilibrium_ic(
-    palioxis_model,
-    adaptor,
-    mobile_profile,
-    T=300.0,
-)
+u0 = build_equilibrium_ic(palioxis_model, model, mobile_profile, 300.0)
 ```
 
 For multiple mobile species, pass a `(n_gas, nx)` matrix instead.
 
-The function calls `Palioxis.set_initial_conditions(model, mobile_node, T)` per spatial node to compute the equilibrium trapped concentrations given the mobile concentration at that node.
+The function calls `Palioxis.set_initial_conditions(model, mobile_node, T)` per spatial
+node to compute the equilibrium trapped concentrations given the mobile concentration
+at that node.
 
-### Achieving Full Equilibrium
+### Equilibrium from Total Hydrogen
 
-If you need the **mobile and trapped species both at equilibrium** simultaneously (e.g., to conserve total hydrogen during a cold start), use `Palioxis.calculate_steady_state!` on each node manually and construct the state vector yourself.
+If you have a total-hydrogen profile (mobile + trapped summed) rather than a mobile
+profile, use `build_ic_from_total_hydrogen`:
+
+```julia
+# Gaussian total-H profile centred at mid-domain
+x     = model.context.mesh.x
+total = 0.01 .* exp.(-(x .- x[end]/2).^2 ./ (2 * (x[end]/10)^2))
+
+u0 = build_ic_from_total_hydrogen(palioxis_model, model, total, 400.0)
+```
+
+Per node this distributes `total[ix]` as an even initial guess, applies
+`Palioxis.ensure_bounds!`, then converges to the nearest equilibrium via
+`Palioxis.calculate_steady_state!`.
+
+!!! note
+    `calculate_steady_state!` finds the nearest equilibrium but does not strictly
+    conserve total hydrogen.  For typical TDS conditions (strong trapping at low T)
+    the result is physically accurate; verify with a mass-balance check if precision
+    is critical.
 
 ## Temperature Providers
 
@@ -177,10 +200,10 @@ T(t) = T0 + ramp_rate * t
 
 ```julia
 # Ramp from 300 K at 1 K/s
-T_provider = LinearRampTemperature(T0=300.0, ramp_rate=1.0)
+T_provider = LinearRampTemperature(300.0, 1.0)   # T0, ramp_rate
 ```
 
-Typical TDS ramp rates are 0.5–5 K/s.
+Typical TDS ramp rates are 0.5–5 K/s (0.0083–0.083 K/s).
 
 ### FunctionTemperature
 

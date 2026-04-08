@@ -2,180 +2,218 @@
 
 ## State Vector Layout
 
-Flopsy models evolve a flat state vector `u` of length `nvars * nx`, where `nvars` is the number of physical variables and `nx` is the number of spatial nodes. A `VariableLayout` describes how each variable is packed into this vector:
+Flopsy models evolve a flat state vector `u` of length `nvars * nx`, where `nvars` is
+the number of physical variables and `nx` is the number of spatial nodes.
+
+The vector is packed in **variable-major (column-major) order**: all variables at node 1
+come first, then all variables at node 2, and so on:
 
 ```
-u[1:nx]           ← Variable 1, nodes 1:nx
-u[nx+1:2*nx]      ← Variable 2, nodes 1:nx
-...
+u[1]              ← Variable 1, node 1
+u[2]              ← Variable 2, node 1
+⋮
+u[nvars]          ← Variable nvars, node 1
+u[nvars + 1]      ← Variable 1, node 2
+⋮
+u[2*nvars]        ← Variable nvars, node 2
+⋮
 ```
 
-Each variable in the layout has:
-- A **name** (e.g., `"mobile_H"`, `"trapped_H_defect1"`).
-- A **group** (`:mobile` or `:trap`) — indicates whether the variable represents free or trapped hydrogen.
-- **Tags** (e.g., `:reaction`, `:diffusion`) — indicate which operators act on this variable.
+The flat index of variable `ivar` at node `ix` is `(ix-1)*nvars + ivar`.
+
+A `VariableLayout` describes the structure: each variable has a **name** (e.g. `:mobile_H`),
+a **group** (e.g. `:mobile`, `:trap`), and **tags** (e.g. `:reaction`, `:diffusion`) that
+control which operators act on it.
 
 ### Reshaping and Views
 
-The helper function `state_view(u, layout, nx)` reshapes `u` into a `(nvars, nx)` matrix, making it easier to index by variable and node. Further helper functions provide intuitive access:
+`state_view(u, layout, nx)` reshapes the flat vector into a `(nvars, nx)` matrix without
+copying, so `U[ivar, ix]` accesses variable `ivar` at node `ix`.
 
-- `node_view(u, layout, ix)` — extract the state at a single spatial node `ix`.
-- `variable_view(u, layout, name)` — extract all values of a variable across all nodes.
-- `group_view(u, layout, group)` — extract all variables in a given group (e.g., all trapped species).
+Further helpers work on the already-reshaped matrix `U`:
 
-These views are essential for localizing computations and for passing state subsets to external libraries like Palioxis.
+- `node_view(U, ix)` — column `ix`; the full state at one node.
+- `variable_view(U, ivar)` — row `ivar`; one variable across all nodes.
+- `group_view(U, layout, group)` — contiguous rows belonging to a named group.
+
+These views are zero-copy and are used pervasively inside operators and the Palioxis bridge.
 
 ## Operators
 
-The package provides a set of abstract operator types that encapsulate different physics:
+Flopsy defines a hierarchy of abstract operator types:
 
-- `AbstractReactionOperator` — governs reaction rates (trapping, detrapping, etc.).
-- `AbstractDiffusionOperator` — governs spatial diffusion and boundary conditions.
-- `AbstractConstraintOperator` — enforces algebraic constraints (e.g., conservation laws, flux boundary conditions).
+- `AbstractReactionOperator` — node-local reaction rates (trapping, detrapping, decay).
+- `AbstractDiffusionOperator` — spatial transport and boundary conditions.
+- `AbstractConstraintOperator` — algebraic constraints (DAE path, currently scaffolded).
 
 ### Capability Flags
 
-Each operator declares what it can compute via capability flags:
+Each operator declares what it implements via predicate functions:
 
-- `supports_rhs(op)` — whether `rhs!(du, op, u, ctx, t)` is implemented.
-- `supports_jacobian(op)` — whether Jacobian blocks can be computed (for implicit solvers).
-- `supports_mass_matrix(op)` — whether a mass-matrix is defined (for DAE systems).
+| Predicate | When `true` |
+|---|---|
+| `supports_rhs(op)` | `rhs!(du, op, u, ctx, t)` accumulates an explicit RHS contribution |
+| `supports_jacobian(op)` | `jacobian!(J, op, u, ctx, t)` accumulates analytic ∂f/∂u entries |
+| `supports_implicit_rhs(op)` | operator contributes to an implicit split |
+| `supports_mass_matrix(op)` | operator provides a mass matrix (DAE path) |
+
+Defaults are `false`; operators opt in by adding the relevant method.
+
+### Analytic Jacobians
+
+`LinearDiffusionOperator`, `DirichletBoundaryOperator`, `ToyReactionOperator`, and
+`SimpleTrappingReactionOperator` all implement `supports_jacobian = true` with analytic
+`jacobian!` methods.
+
+The Jacobian structure exploits the known sparsity:
+
+- **Diffusion**: tridiagonal coupling along each diffusing variable's spatial dimension
+  (same variable, adjacent nodes).
+- **Reaction**: dense within each node's variable block (all variables at a node can
+  couple to each other), but no inter-node coupling.
+- **Combined**: block-tridiagonal sparse matrix, built automatically as a `SparseArrays`
+  prototype by `build_unsplit_problem` when `supports_jacobian` returns `true` for the
+  assembled `OperatorSum`.
+
+For models where Jacobian support is unavailable (e.g. `HotgatesReactionOperator`),
+`build_unsplit_problem` falls back to `ODEFunction(f!)` without an explicit Jacobian,
+relying on the algorithm's own differentiation strategy.
 
 ### The RHS Contract
-
-All operators implement a common interface:
 
 ```julia
 rhs!(du, op, u, ctx, t)
 ```
 
-where:
-- `du` is the rate-of-change vector (in-place update).
-- `op` is the operator instance.
-- `u` is the current state vector.
-- `ctx` is a `SystemContext` holding mesh, auxiliary data, and scratch space.
-- `t` is the current time.
+- `du` — pre-allocated output vector; the operator **accumulates** into it (does not zero it).
+- `u`  — current flat state vector.
+- `ctx` — `SystemContext` with mesh, layout, and scratch buffers.
+- `t`  — current time.
 
-The operator **accumulates** contributions to `du` (does not overwrite).
+`OperatorSum.rhs!` zeros `du` before calling each sub-operator, so the total RHS is the
+sum of all operator contributions.
 
-### Example: DirichletBoundaryOperator
+### DirichletBoundaryOperator
 
-Boundary conditions are themselves operators. The `DirichletBoundaryOperator` adds time-varying Dirichlet corrections on top of the zero-flux stencil:
+Boundary conditions are operators. `DirichletBoundaryOperator` adds ghost-node Dirichlet
+corrections on top of the zero-flux stencil already in `LinearDiffusionOperator`:
 
 ```julia
 boundary = DirichletBoundaryOperator(
-    selector,
-    coefficients;
-    left = t -> 0.0,      # callable boundary value
+    selector, coefficients, temperature;
+    left  = t -> 0.0,
     right = t -> 0.0,
 )
 ```
 
-The operator queries the callables `left(t)` and `right(t)` at each time step and adds the corrections:
-
-```
-dU[ivar, 1]  += D * (left(t)  - U[ivar, 1])  / dx²
-dU[ivar, nx] += D * (right(t) - U[ivar, nx]) / dx²
-```
-
-Combined with the centred stencil from `LinearDiffusionOperator`, this gives the standard Dirichlet discretisation.
+The combined stencil at node 1 becomes `D*(U[2] - 2*U[1] + g)/dx²`, where `g = left(t)`.
 
 ### Composition with OperatorSum
 
-Complex problems combine multiple operators via `OperatorSum`:
+Complex problems combine operators via `OperatorSum`:
 
 ```julia
-op = OperatorSum([reaction_op, diffusion_op, boundary_op, constraint_op])
-rhs!(du, op, u, ctx, t)  # calls rhs! on each operator and sums the results
+total = OperatorSum((reaction_op, diffusion_op, boundary_op))
+rhs!(du, total, u, ctx, t)    # calls each sub-operator and accumulates
+jacobian!(J, total, u, ctx, t) # sums analytic Jacobian contributions (if all support it)
 ```
 
-Each operator accumulates its contribution independently, making the composition modular and extensible.
+`active_operators(model)` returns all non-`nothing` slots from `model.operators` as a
+`Vector`, which `build_unsplit_problem` wraps in a `OperatorSum`.
+
+## Diffusion Coefficients
+
+`LinearDiffusionOperator` and `DirichletBoundaryOperator` accept either:
+
+- A plain `Vector{<:Real}` — constant, temperature-independent.
+- Any `AbstractDiffusionCoefficients` subtype — evaluated via `get_D(coeffs, ivar, ix, T)`:
+  - `ConstantDiffusion` — ignores both `ix` and `T`.
+  - `ArrheniusDiffusion` — D(T) = D₀ exp(−Eₐ/kBT), ignores `ix`.
+  - `CallableDiffusion` — one callable `f(T)` per variable.
+  - `PalioxisDiffusionCoefficients` (Palioxis extension) — queries `Palioxis.diffusion_constants` at every evaluation.
+
+The `ix` argument is reserved for future spatially-varying D; all current types ignore it.
 
 ## Formulations
 
-A **formulation** specifies how operators are combined to construct a SciML-compatible problem. Different formulations support different time-integration strategies:
+A **formulation** specifies how operators are assembled into a SciML-compatible problem.
 
 ### UnsplitFormulation
 
-The production formulation: all operators are combined into a single ODE system
+The default: all active operators are summed into a single ODE.
 
 ```
-du/dt = reaction(u, t) + diffusion(u, t) + boundary(u, t) + ...
+du/dt = Σ rhs!(op, u, t)   for all active operators
 ```
 
-The operators are summed directly in `rhs!`, and the entire state is integrated implicitly. This fully-implicit approach is robust for stiff systems.
+When `supports_jacobian` is true for the assembled `OperatorSum`, `build_unsplit_problem`
+automatically constructs a sparse `ODEFunction` with an analytic Jacobian:
+
+```julia
+ODEFunction(f!, jac = jac!, jac_prototype = sparse_prototype)
+```
+
+The sparse prototype is built from the known structure: dense within-node blocks (reaction
+coupling) plus tridiagonal off-diagonals (diffusion coupling).
 
 ### Other Formulations (Stubs)
 
-- `IMEXFormulation` — separate explicit and implicit operators for semi-implicit time integration.
-- `OperatorSplitFormulation` — time-split the operators (e.g., reaction steps followed by diffusion steps).
-- `DAEFormulation` — residual-based formulation for systems with algebraic constraints.
+- `IMEXFormulation` — separate explicit and implicit parts for semi-implicit integration.
+- `SplitFormulation` / `LieSplit` / `StrangSplit` — operator-split time stepping.
+- `ResidualFormulation` — residual-based DAE path.
 
-These are currently scaffolded; production use should employ `UnsplitFormulation`.
+These are scaffolded and will be implemented in a future pass.  Production simulations
+should use `UnsplitFormulation`.
 
 ## SystemModel and SystemContext
 
 ### SystemModel
 
-A `SystemModel` bundles the complete problem description:
+Bundles the complete problem description:
 
-- **VariableLayout** — the structure of the state vector.
-- **Operators** — a named tuple `(reaction, diffusion, boundary, constraints)`. Each slot may be `nothing` if that physics is absent. The `boundary` slot was added to support operators that modify boundary behavior independently of the main diffusion stencil.
-- **SystemContext** — mesh, spatial step size, auxiliary parameters, and scratch arrays.
+- **VariableLayout** — structure of the state vector.
+- **Operators** — named tuple `(reaction, diffusion, boundary, constraints)`.  Each slot
+  may be `nothing`.
+- **SystemContext** — mesh, node count, aux data, scratch buffers.
 
-It serves as the central object passed through the solve pipeline.
-
-```julia
-model = SystemModel(layout, operators, context)
-```
-
-The operators tuple is created via `build_rd_model`:
+Built via `build_rd_model`:
 
 ```julia
 model = build_rd_model(
-    layout = layout,
-    mesh = mesh,
-    reaction = reaction_op,
-    diffusion = diffusion_op,
-    boundary = boundary_op,        # DirichletBoundaryOperator or nothing
-    constraints = constraint_op,
-    aux = Dict(:temp_profile => ..., ...)
+    layout      = layout,
+    mesh        = mesh,
+    reaction    = reaction_op,
+    diffusion   = diffusion_op,
+    boundary    = boundary_op,   # DirichletBoundaryOperator or nothing
 )
 ```
 
 ### SystemContext
 
-The `SystemContext` holds:
+Holds:
 
-- **layout** — `VariableLayout` describing state vector structure.
-- **nx** — number of spatial nodes.
-- **mesh** — `Mesh1D` with grid coordinates and spacing.
-- **aux** — dictionary of auxiliary data (temperature profiles, material properties, defect densities).
-- **scratch** — pre-allocated arrays for in-place computations (populated as needed by operators).
-
-By centralizing auxiliary data and pre-allocated arrays, `SystemContext` ensures that operators and time integrators can compute efficiently without repeated allocations.
+- **`layout`** — `VariableLayout`.
+- **`nx`** — number of spatial nodes.
+- **`mesh`** — `Mesh1D` with coordinates and spacing.
+- **`aux`** — `Dict{Symbol,Any}` for auxiliary data.
+- **`scratch`** — `Dict{Symbol,Any}` for pre-allocated working arrays (populated lazily
+  by operators via `get!(ctx.scratch, key) do ... end`).
 
 ## SolverConfig and Solve Pipeline
 
-A `SolverConfig` wraps:
+`SolverConfig` wraps:
 
-- **Formulation** — which formulation to use (typically `UnsplitFormulation`).
-- **Algorithm** — the time-integration algorithm (e.g., `Rodas5`, `CVODE_BDF` via Sundials.jl).
-- **Tolerances** — absolute and relative error tolerances.
-- **Save settings** — output frequency and dense output options.
+- **`formulation`** — typically `UnsplitFormulation()`.
+- **`algorithm`** — SciML algorithm, e.g. `Rodas5(autodiff=AutoFiniteDiff())`.
+- **`abstol`, `reltol`** — solver tolerances.
+- **`saveat`** — output times.
 
-### The Solve Pipeline
-
-1. **build_problem** — Given a `SystemModel` and `SolverConfig`, construct a SciML `ODEProblem`.
-2. **solve_problem** — Solve the problem using the specified algorithm and tolerances.
-
-The pipeline abstracts away SciML boilerplate: the user provides a high-level model description, and Flopsy handles the conversion to a form suitable for robust implicit solvers.
+### Pipeline
 
 ```julia
-model = SystemModel(layout, operators, context)
-config = SolverConfig(formulation, algorithm, rtol, atol)
-problem = build_problem(model, config)
-solution = solve_problem(problem, config)
+sol    = solve_problem(model, u0, tspan, solver_config)
+result = wrap_result(model, sol, config)
 ```
 
-This design ensures that adding new operators or formulations requires minimal changes to the solver infrastructure.
+`solve_problem` calls `build_problem`, which dispatches on the formulation to construct
+the `ODEProblem` (with sparse Jacobian if available), then calls `SciMLBase.solve`.
