@@ -26,12 +26,20 @@
 using Flopsy
 using Palioxis
 
+using LinearAlgebra
+using SparseArrays
+using ADTypes
+using TOML
+using SciMLBase
+using OrdinaryDiffEq
+
+
 # ---------------------------------------------------------------------------
 # 1.  Palioxis model
 # ---------------------------------------------------------------------------
 
-Palioxis.init(get(ENV, "PALIOXIS_ROOT", "/path/to/palioxis"))
-const XML_FILE = get(ENV, "PALIOXIS_XML", "model.xml")
+Palioxis.init(get(ENV, "PALIOXIS_ROOT", "/Users/sdixon/src/palioxis-tds/Palioxis"))
+const XML_FILE = get(ENV, "PALIOXIS_XML", "traps.xml")
 
 pal = MultipleDefectModel(XML_FILE)
 report(pal)
@@ -97,7 +105,7 @@ temperature = FunctionTemperature(T_profile)
 #     DirichletBoundaryOperator internally, matched to the same D(T).
 # ---------------------------------------------------------------------------
 
-const C_SURFACE_LOAD = 1.0
+const C_SURFACE_LOAD = 1.0e-10
 
 model = build_palioxis_trapping_model(
     palioxis_model = pal,
