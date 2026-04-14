@@ -98,13 +98,20 @@ export
     CallableDiffusion,
 
     LinearDiffusionOperator,
+    WeakDirichletBoundaryOperator,
     DirichletBoundaryOperator,
+    PenaltyMethod,
+    MassMatrixMethod,
+    CallbackMethod,
+    EliminatedMethod,
+    build_solver_callback,
     ToyReactionOperator,
     SimpleTrappingReactionOperator,
     ConstraintOperator,
 
     UnsplitFormulation,
     IMEXFormulation,
+    IMEXReactionFormulation,
     LieSplit,
     StrangSplit,
     SplitFormulation,
@@ -156,5 +163,6 @@ export
     plot_tds_flux,
     plot_spatial_snapshot,
     plot_spatial_evolution,
-    record_spatial_video
+    record_spatial_video,
+    record_spatial_animation
 end

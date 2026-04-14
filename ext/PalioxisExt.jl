@@ -33,6 +33,65 @@ end
 # hotgates_rates! — dispatch for the real Palioxis backend
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# supports_jacobian — enabled for the Palioxis backend
+# ---------------------------------------------------------------------------
+
+function Flopsy.supports_jacobian(op::Flopsy.HotgatesReactionOperator{<:Palioxis.MultipleDefectModel})
+    return true
+end
+
+
+# ---------------------------------------------------------------------------
+# hotgates_jacobian! — analytic per-node Jacobian via Palioxis C API
+# ---------------------------------------------------------------------------
+
+function Flopsy.hotgates_jacobian!(
+    J_local::AbstractMatrix,
+    model::Palioxis.MultipleDefectModel,
+    adaptor::Flopsy.HotgatesTrappingAdaptor,
+    mobile::AbstractVector,
+    defects::AbstractVector,
+    trapped::AbstractVector,
+    T::Real,
+)
+    jac = Palioxis.time_derivatives_jacobian(model, defects, mobile, trapped, T)
+
+    n_gas = model.n_gas
+    n_ne  = model.n_ne_species
+
+    # Unpack blocks — stored Fortran col-major, which matches Julia col-major,
+    # so reshape gives the correct matrix directly.
+    ddx_dx   = reshape(jac.ddx_dx.data,   n_gas, n_gas)    # d(mobile_rates)/d(mobile)
+    ddx_dyc  = reshape(jac.ddx_dyc.data,  n_gas, n_ne)     # d(mobile_rates)/d(trapped)
+    ddydt_dx = reshape(jac.ddydt_dx.data, n_ne,  n_gas)    # d(trapped_rates)/d(mobile)
+    ddydt_dyc= reshape(jac.ddydt_dyc.data,n_ne,  n_ne)     # d(trapped_rates)/d(trapped)
+
+    m_idxs = adaptor.mobile_indices   # row/col positions in local state
+    t_idxs = adaptor.trap_indices
+
+    # Accumulate into J_local (row = output variable, col = input variable)
+    @inbounds for (im2, cm) in enumerate(m_idxs), (im1, rm) in enumerate(m_idxs)
+        J_local[rm, cm] += ddx_dx[im1, im2]
+    end
+    @inbounds for (it2, ct) in enumerate(t_idxs), (im1, rm) in enumerate(m_idxs)
+        J_local[rm, ct] += ddx_dyc[im1, it2]
+    end
+    @inbounds for (im2, cm) in enumerate(m_idxs), (it1, rt) in enumerate(t_idxs)
+        J_local[rt, cm] += ddydt_dx[it1, im2]
+    end
+    @inbounds for (it2, ct) in enumerate(t_idxs), (it1, rt) in enumerate(t_idxs)
+        J_local[rt, ct] += ddydt_dyc[it1, it2]
+    end
+
+    return J_local
+end
+
+
+# ---------------------------------------------------------------------------
+# hotgates_rates!
+# ---------------------------------------------------------------------------
+
 function Flopsy.hotgates_rates!(
     dmobile::AbstractVector,
     dtrapped::AbstractVector,
@@ -91,8 +150,8 @@ function Flopsy.build_palioxis_trapping_model(;
     diffusion = Flopsy.LinearDiffusionOperator(diff_coeffs, selector, nothing, temperature)
 
     boundary = if left_bc !== nothing || right_bc !== nothing
-        Flopsy.DirichletBoundaryOperator(selector, diff_coeffs, temperature;
-                                          left=left_bc, right=right_bc)
+        Flopsy.WeakDirichletBoundaryOperator(selector, diff_coeffs, temperature;
+                                              left=left_bc, right=right_bc)
     else
         nothing
     end

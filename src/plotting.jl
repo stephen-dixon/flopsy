@@ -3,30 +3,13 @@
 
 Plot desorption flux vs temperature for a TDS simulation.
 
-`source` can be:
-- A `String` path to a summary CSV written by `write_summary_csv`
-- A `DataFrame` already loaded
-- A `SimulationResult` (temperature must be in `result.summaries[:extra_timeseries]`
-  under the key `"temperature_K"`)
+`source` can be a `String` path to a summary CSV, a `DataFrame`, or a `SimulationResult`.
 
 # Keyword arguments
-- `flux_vars` — variable names to plot fluxes for (default: all variables with flux columns).
-- `temperature_column` — name of the temperature column in the CSV/DataFrame (default: `"temperature_K"`).
+- `flux_vars` — variable names to plot (default: all flux columns).
+- `temperature_column` — name of the temperature column (default: `"temperature_K"`).
 - `surface` — `:right`, `:left`, or `:both` (default: `:right`).
-- `title` — plot title string (default: `"TDS Desorption Spectrum"`).
-- `kwargs...` — forwarded to the Makie `lines!` call.
-
-# Example
-```julia
-using Flopsy, CairoMakie
-
-# From a summary CSV
-fig = plot_tds_flux("tds_summary.csv")
-save("tds_spectrum.png", fig)
-
-# From a SimulationResult (temperature must be stored as extra_timeseries)
-fig = plot_tds_flux(result)
-```
+- `title` — plot title (default: `"TDS Desorption Spectrum"`).
 
 Requires a Makie backend (`using CairoMakie` or `using GLMakie`).
 """
@@ -40,35 +23,19 @@ end
 
 Plot the spatial profile of one or more variables at a single time point.
 
-`source` can be:
-- A `SimulationResult`
-- A `String` path to an HDF5 file written by `write_field_output_hdf5`
+`source` can be a `SimulationResult` or a `String` path to an HDF5 file.
 
 # Keyword arguments
-- `vars` — variable name(s) to plot (Symbol or Vector{Symbol}; default: all variables).
-- `time_index` — saved-time index to plot (integer, or `:last`; default: `:last`).
-- `group_fn` — optional grouping function `(var_names, data_matrix) -> Dict{String, Vector}`
-  that aggregates variables (e.g. sum by trap type) before plotting.  Useful for Palioxis
-  models with many occupancy-level DOFs.
-- `title` — plot title (default: auto-generated from time).
-- `xlabel` — x-axis label (default: `"Position (m)"`).
-- `ylabel` — y-axis label (default: `"Concentration"`).
-
-# Palioxis grouping helpers
-
-For Palioxis-backed models with many trap occupancy levels, use a grouping function to
-aggregate by trap type or by occupancy level before plotting:
-
-```julia
-# Sum all trap_H_* variables into a single "Total Trapped" series
-group_fn = (names, data) -> begin
-    mobile = Dict{String,Vector}(n => data[i, :] for (i, n) in enumerate(names) if startswith(n, "mobile"))
-    trapped = sum(data[i, :] for (i, n) in enumerate(names) if startswith(n, "trap"); init=zeros(size(data, 2)))
-    merge(mobile, Dict("Total Trapped" => trapped))
-end
-
-fig = plot_spatial_snapshot(result; group_fn=group_fn)
-```
+- `vars` — variable name(s) to plot (Symbol or Vector{Symbol}; default: all).
+- `time_index` — saved-time index to plot (integer or `:last`; default: `:last`).
+- `group_fn` — optional aggregation function `(names, data_matrix) -> Dict{String,Vector}`.
+- `all_on_one` — plot all variables/groups on a single axis (default: `true`).
+- `xscale` — `:log10` or `:identity` (default: `:log10`).
+- `yscale` — `:log10` or `:identity` (default: `:log10`).
+- `xmin` — clamp x values to this minimum before log scaling (default: `1e-20`).
+- `ymin` — clamp y values to this minimum before log scaling (default: `1e-20`).
+- `title` — plot title (default: auto from time).
+- `xlabel` / `ylabel` — axis labels.
 
 Requires a Makie backend.
 """
@@ -80,18 +47,20 @@ end
 """
     plot_spatial_evolution(source; kwargs...) -> Figure
 
-Plot spatial profiles at multiple time points overlaid on a single axis, coloured by time.
+Plot spatial profiles at multiple time points, coloured by time.
 
-`source` can be:
-- A `SimulationResult`
-- A `String` path to an HDF5 file
+`source` can be a `SimulationResult` or a `String` path to an HDF5 file.
 
 # Keyword arguments
-- `vars` — variable name(s) to include (Symbol or Vector{Symbol}; default: all).
-- `times` — time values to plot (matched to nearest saved time; default: 10 evenly-spaced
-  snapshots across the full time range).
-- `group_fn` — optional aggregation function (same interface as `plot_spatial_snapshot`).
-- `colormap` — Makie colormap name (default: `"viridis"`).
+- `vars` — variable name(s) (default: all).
+- `times` — time values to plot (default: 10 evenly-spaced snapshots).
+- `group_fn` — optional aggregation function.
+- `all_on_one` — all variables on a single axis (default: `true`).
+- `xscale` — `:log10` or `:identity` (default: `:log10`).
+- `yscale` — `:log10` or `:identity` (default: `:log10`).
+- `xmin` — minimum x clamp for log scaling (default: `1e-20`).
+- `ymin` — minimum y clamp for log scaling (default: `1e-20`).
+- `colormap` — Makie colormap (default: `:viridis`).
 - `title` — plot title.
 
 Requires a Makie backend.
@@ -104,31 +73,55 @@ end
 """
     record_spatial_video(source, output_path; kwargs...) -> output_path
 
-Record an animated video of the spatial distribution evolving over time.
+Record an animated video (e.g. MP4) of the spatial distribution per variable
+evolving over time.  Variables are plotted in separate panels.
 
-`source` can be:
-- A `SimulationResult`
-- A `String` path to an HDF5 file
+`source` can be a `SimulationResult` or a `String` path to an HDF5 file.
 
 # Keyword arguments
-- `vars` — variable name(s) to animate (Symbol or Vector{Symbol}; default: all).
+- `vars` — variable name(s) to animate (default: all).
 - `fps` — frames per second (default: `30`).
 - `group_fn` — optional aggregation function.
-- `title_fn` — function `t -> String` that generates a title from the current time
-  (default: `t -> @sprintf("t = %.1f s", t)`).
-- `ylims` — fixed y-axis limits `(ymin, ymax)`, or `nothing` for auto-scaling (default: `nothing`).
-
-# Example
-```julia
-using Flopsy, CairoMakie
-
-record_spatial_video(result, "spatial_evolution.mp4"; fps=24, vars=[:mobile_H])
-```
+- `title_fn` — `t -> String` (default: `t -> "t = %.3g s"`).
+- `ylims` — fixed y limits or `nothing` for auto-scaling.
 
 Requires a Makie backend.
 """
 function record_spatial_video(source, output_path; kwargs...)
     _makie_error("record_spatial_video")
+end
+
+
+"""
+    record_spatial_animation(source, output_path; kwargs...) -> output_path
+
+Record an animated video of the spatial distribution with all variables/groups
+on a single log-log axis, evolving over every saved time step.
+
+`source` can be a `SimulationResult` or a `String` path to an HDF5 file.
+
+# Keyword arguments
+- `vars` — variable name(s) (default: all).
+- `fps` — frames per second (default: `30`).
+- `group_fn` — optional aggregation function.
+- `title_fn` — `t -> String` title generator (default: `t -> "t = %.3g s"`).
+- `xscale` — `:log10` or `:identity` (default: `:log10`).
+- `yscale` — `:log10` or `:identity` (default: `:log10`).
+- `xmin` — minimum x clamp for log scaling (default: `1e-20`).
+- `ymin` — minimum y clamp for log scaling (default: `1e-20`).
+- `ylims` — fixed y limits after clamping, or `nothing` for auto.
+- `colormap` — colormap for line colours cycling over variables (default: `:tab10`).
+
+Requires a Makie backend (`using CairoMakie` for MP4 output).
+
+# Example
+```julia
+using Flopsy, CairoMakie
+record_spatial_animation(result, "spatial.mp4"; fps=24, group_fn=my_group_fn)
+```
+"""
+function record_spatial_animation(source, output_path; kwargs...)
+    _makie_error("record_spatial_animation")
 end
 
 

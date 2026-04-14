@@ -62,3 +62,39 @@ function jacobian!(J, op::OperatorSum, u, ctx, t)
     end
     return J
 end
+
+# Mass matrix: true if any sub-op has a mass matrix; combined matrix takes elementwise min.
+function supports_mass_matrix(op::OperatorSum)
+    return any(supports_mass_matrix, op.ops)
+end
+
+function mass_matrix(op::OperatorSum, ctx::SystemContext)
+    mm_ops = [sub for sub in op.ops if supports_mass_matrix(sub)]
+    isempty(mm_ops) && return nothing
+
+    nvars = nvariables(ctx.layout)
+    n     = nvars * ctx.nx
+    m     = ones(Float64, n)
+
+    for sub in mm_ops
+        M_sub = mass_matrix(sub, ctx)
+        M_sub === nothing && continue
+        @inbounds for i in 1:n
+            m[i] = min(m[i], M_sub.diag[i])
+        end
+    end
+
+    return Diagonal(m)
+end
+
+# Callback collection: recurse into sub-operators.
+function build_solver_callback(op::OperatorSum, model::SystemModel)
+    cbs = []
+    for sub in op.ops
+        cb = build_solver_callback(sub, model)
+        cb !== nothing && push!(cbs, cb)
+    end
+    isempty(cbs) && return nothing
+    length(cbs) == 1 && return cbs[1]
+    return CallbackSet(cbs...)
+end

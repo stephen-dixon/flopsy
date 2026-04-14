@@ -48,6 +48,32 @@ struct SplitFormulation{S} <: AbstractFormulation
 end
 
 """
+    IMEXReactionFormulation
+
+IMEX splitting formulation where **reaction** is treated implicitly (stiff
+partition) and **diffusion + boundary** operators are treated explicitly
+(non-stiff partition).  Assembles a `SplitODEProblem` for use with IMEX
+algorithms such as `KenCarp4()`.
+
+Use this when the reaction kinetics dominate the stiffness (e.g. fast trapping/
+detrapping) and diffusion is comparatively slow.  If a Jacobian is available for
+the reaction operator (e.g. via `Palioxis.time_derivatives_jacobian`) it is used
+to accelerate the implicit solve.
+
+# Example
+```julia
+config = SolverConfig(
+    formulation = IMEXReactionFormulation(),
+    algorithm   = KenCarp4(),
+    abstol      = 1e-8,
+    reltol      = 1e-6,
+    saveat      = saveat,
+)
+```
+"""
+struct IMEXReactionFormulation <: AbstractFormulation end
+
+"""
     ResidualFormulation
 
 DAE formulation using a singular mass matrix.  Variables in the `:trap` group are

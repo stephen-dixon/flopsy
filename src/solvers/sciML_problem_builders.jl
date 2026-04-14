@@ -8,6 +8,8 @@ function build_problem(model::SystemModel, u0, tspan, ::UnsplitFormulation, solv
     return build_unsplit_problem(model, u0, tspan, solver_config)
 end
 
+# IMEXFormulation and IMEXReactionFormulation are dispatched in formulations/imex.jl
+
 function build_unsplit_problem(model::SystemModel, u0, tspan, solver_config::SolverConfig)
     ops = Tuple(active_operators(model))
     total_op = OperatorSum(ops)
@@ -21,6 +23,9 @@ function build_unsplit_problem(model::SystemModel, u0, tspan, solver_config::Sol
         return nothing
     end
 
+    # Collect mass matrix from MassMatrixMethod operators (if any).
+    M = _collect_mass_matrix(ops, model.context)
+
     if supports_jacobian(total_op)
         prototype = _build_jac_prototype(model, ops)
 
@@ -29,9 +34,18 @@ function build_unsplit_problem(model::SystemModel, u0, tspan, solver_config::Sol
             return nothing
         end
 
-        ode_f = ODEFunction(f!, jac = jac!, jac_prototype = prototype)
+        if M !== nothing
+            ode_f = ODEFunction(f!, jac = jac!, jac_prototype = prototype,
+                                mass_matrix = M)
+        else
+            ode_f = ODEFunction(f!, jac = jac!, jac_prototype = prototype)
+        end
     else
-        ode_f = ODEFunction(f!)
+        if M !== nothing
+            ode_f = ODEFunction(f!, mass_matrix = M)
+        else
+            ode_f = ODEFunction(f!)
+        end
     end
 
     return ODEProblem(ode_f, u0, tspan)
@@ -39,13 +53,42 @@ end
 
 
 # ---------------------------------------------------------------------------
+# Mass matrix collection
+# ---------------------------------------------------------------------------
+
+"""
+    _collect_mass_matrix(ops, ctx) -> Diagonal or nothing
+
+Scan operators for `MassMatrixMethod` Dirichlet BCs.  Builds a combined
+diagonal mass matrix (identity everywhere except boundary DOFs which get 0).
+Returns `nothing` if no mass-matrix operators are found.
+"""
+function _collect_mass_matrix(ops, ctx::SystemContext)
+    any(supports_mass_matrix, ops) || return nothing
+
+    layout = ctx.layout
+    nx     = ctx.nx
+    nvars  = nvariables(layout)
+    n      = nvars * nx
+
+    m = ones(Float64, n)
+    for op in ops
+        supports_mass_matrix(op) || continue
+        M_op = mass_matrix(op, ctx)
+        M_op === nothing && continue
+        @inbounds for i in 1:n
+            m[i] = min(m[i], M_op.diag[i])
+        end
+    end
+
+    return Diagonal(m)
+end
+
+
+# ---------------------------------------------------------------------------
 # Sparse Jacobian prototype
 # ---------------------------------------------------------------------------
 
-# Build a sparse Float64 matrix whose sparsity pattern reflects the known
-# structure of the assembled operator:
-# - Within each node: all-to-all (dense nvars×nvars block) for reaction coupling.
-# - Between adjacent nodes: same-variable entries for diffusion coupling.
 function _build_jac_prototype(model::SystemModel, ops)
     layout = model.context.layout
     nx     = model.context.nx
@@ -54,8 +97,6 @@ function _build_jac_prototype(model::SystemModel, ops)
 
     entries = Set{Tuple{Int,Int}}()
 
-    # Dense within-node blocks: every variable at node ix can couple to every
-    # other variable at node ix (reaction terms).
     for ix in 1:nx
         offset = (ix - 1) * nvars
         for iv1 in 1:nvars, iv2 in 1:nvars
@@ -63,7 +104,6 @@ function _build_jac_prototype(model::SystemModel, ops)
         end
     end
 
-    # Spatial coupling: same variable at adjacent nodes (diffusion operators).
     for op in ops
         for ivar in diffusion_variable_indices(op, layout)
             for ix in 1:(nx - 1)
