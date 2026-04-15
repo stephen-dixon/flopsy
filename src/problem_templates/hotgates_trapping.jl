@@ -4,7 +4,7 @@ function instantiate(::HotgatesTrappingTemplate, cfg::ProblemConfig)
     mesh = _build_mesh(cfg.mesh)
     backend = FakeHotgatesModel(
         _get_parameter(cfg, :k_trap, 5.0),
-        _get_parameter(cfg, :k_detrap, 0.5),
+        _get_parameter(cfg, :k_detrap, 0.5)
     )
 
     nx = mesh_nx(mesh)
@@ -14,7 +14,7 @@ function instantiate(::HotgatesTrappingTemplate, cfg::ProblemConfig)
         ["c"],
         ["theta"],
         String[],
-        zeros(Float64, 0, nx),
+        zeros(Float64, 0, nx)
     )
 
     coeffs = [_get_parameter(cfg, :diffusion_coefficient, 0.01), 0.0]
@@ -23,7 +23,7 @@ function instantiate(::HotgatesTrappingTemplate, cfg::ProblemConfig)
         model = backend,
         adaptor = adaptor,
         temperature = ConstantTemperature(_get_parameter(cfg, :temperature, 300.0)),
-        diffusion_coefficients = coeffs,
+        diffusion_coefficients = coeffs
     )
 
     u0 = zeros(Float64, nvariables(model.layout) * nx)

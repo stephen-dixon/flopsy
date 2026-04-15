@@ -36,7 +36,7 @@ function _build_solver_config(cfg::InputSolverConfig)
         saveat = cfg.saveat,
         dt = cfg.dt,
         show_progress = false,
-        show_solver_stats = false,
+        show_solver_stats = false
     )
 end
 
@@ -77,13 +77,13 @@ Solve a config-built `SimulationProblem` and return a wrapped result.
 """
 function solve(problem::SimulationProblem)
     sol = solve_problem(problem.model, problem.u0, problem.tspan, problem.solver_config)
-    metadata = Dict{String,Any}(
+    metadata = Dict{String, Any}(
         "problem_type" => string(problem.config.problem_type),
         "algorithm" => string(typeof(problem.solver_config.algorithm)),
         "formulation" => string(typeof(problem.solver_config.formulation)),
         "nx" => problem.model.context.nx,
         "nvariables" => nvariables(problem.model.layout),
-        "retcode" => string(getproperty(sol, :retcode)),
+        "retcode" => string(getproperty(sol, :retcode))
     )
     return wrap_result(problem.model, sol, problem.config; metadata = metadata)
 end
@@ -138,7 +138,9 @@ function _build_boundary_operator(cfg::ProblemConfig, layout::VariableLayout, co
             end
         else
             method = _build_boundary_method(bc.method)
-            push!(ops, DirichletBoundaryOperator(bc.side, bc_fn, selector, coefficients, nothing; method = method))
+            push!(ops,
+                DirichletBoundaryOperator(
+                    bc.side, bc_fn, selector, coefficients, nothing; method = method))
         end
     end
 

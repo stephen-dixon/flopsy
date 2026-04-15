@@ -37,7 +37,7 @@ step!(u, ::NullOperator, ctx, dt, t) = u
 residual!(res, ::NullOperator, du, u, ctx, t) = res
 jacobian!(J, ::NullOperator, u, ctx, t) = J
 mass_matrix(::NullOperator, ctx) = nothing
-jacobian_node_sparsity(::NullOperator, layout) = Set{Tuple{Int,Int}}()
+jacobian_node_sparsity(::NullOperator, layout) = Set{Tuple{Int, Int}}()
 
 """
     rhs!(du, op, u, ctx, t) -> du

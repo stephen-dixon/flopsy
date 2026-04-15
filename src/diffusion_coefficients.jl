@@ -15,7 +15,6 @@ Concrete types:
 """
 abstract type AbstractDiffusionCoefficients end
 
-
 """
     get_D(coefficients, ivar, ix, T) -> Float64
 
@@ -33,7 +32,6 @@ function get_D end
 # Plain vector fallback — constant coefficients, ix and T are ignored.
 get_D(coeffs::AbstractVector{<:Real}, ivar::Int, ix::Int, T) = Float64(coeffs[ivar])
 
-
 # ---------------------------------------------------------------------------
 
 """
@@ -45,12 +43,11 @@ Temperature-independent, spatially-uniform diffusion coefficients.
 Equivalent to passing a plain `Vector{Float64}` to `LinearDiffusionOperator`, but
 allows mixing with other `AbstractDiffusionCoefficients` types in operator trees.
 """
-struct ConstantDiffusion{T<:Real} <: AbstractDiffusionCoefficients
+struct ConstantDiffusion{T <: Real} <: AbstractDiffusionCoefficients
     values::Vector{T}
 end
 
 get_D(c::ConstantDiffusion, ivar::Int, ix::Int, T) = Float64(c.values[ivar])
-
 
 # ---------------------------------------------------------------------------
 
@@ -74,21 +71,21 @@ D_mobile = ArrheniusDiffusion([1e-7], [0.2])
 diffusion = LinearDiffusionOperator(D_mobile, selector, nothing, temperature)
 ```
 """
-struct ArrheniusDiffusion{T<:Real} <: AbstractDiffusionCoefficients
+struct ArrheniusDiffusion{T <: Real} <: AbstractDiffusionCoefficients
     D0::Vector{T}
     Ea::Vector{T}
     kb::Float64
 end
 
 function ArrheniusDiffusion(D0::AbstractVector{T}, Ea::AbstractVector{T};
-                             kb::Float64=8.617333e-5) where {T<:Real}
+        kb::Float64 = 8.617333e-5) where {T <: Real}
     length(D0) == length(Ea) || throw(ArgumentError("D0 and Ea must have the same length"))
     ArrheniusDiffusion(collect(T, D0), collect(T, Ea), kb)
 end
 
-get_D(c::ArrheniusDiffusion, ivar::Int, ix::Int, T::Real) =
+function get_D(c::ArrheniusDiffusion, ivar::Int, ix::Int, T::Real)
     c.D0[ivar] * exp(-c.Ea[ivar] / (c.kb * T))
-
+end
 
 # ---------------------------------------------------------------------------
 

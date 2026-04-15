@@ -5,20 +5,21 @@ function package_versions()
         "SciMLBase" => string(Base.PkgId(SciMLBase).version),
         "HDF5" => string(Base.PkgId(HDF5).version),
         "CSV" => string(Base.PkgId(CSV).version),
-        "DataFrames" => string(Base.PkgId(DataFrames).version),
+        "DataFrames" => string(Base.PkgId(DataFrames).version)
     )
 end
 
-function make_run_info(; config_path::Union{Nothing,String}=nothing)
+function make_run_info(; config_path::Union{Nothing, String} = nothing)
     return RunInfo(
         string(uuid4()),
         now(),
         config_path,
-        package_versions(),
+        package_versions()
     )
 end
 
-function print_run_banner(model::SystemModel, u0, tspan, solver_config::SolverConfig, run_info::RunInfo)
+function print_run_banner(
+        model::SystemModel, u0, tspan, solver_config::SolverConfig, run_info::RunInfo)
     println("==================================================")
     println("Flopsy run starting")
     println("Run ID:         ", run_info.run_id)
@@ -32,7 +33,7 @@ function print_run_banner(model::SystemModel, u0, tspan, solver_config::SolverCo
     println("ndofs:          ", length(u0))
     println("Variable names: ", join(string.(variable_names(model.layout)), ", "))
     println("Package versions:")
-    for (k, v) in sort(collect(run_info.package_versions); by=first)
+    for (k, v) in sort(collect(run_info.package_versions); by = first)
         println("  ", rpad(k, 18), v)
     end
     println("==================================================")

@@ -3,8 +3,9 @@
 # ---------------------------------------------------------------------------
 
 _eval_D(coeffs::AbstractVector{<:Real}, ivar::Int, ix::Int, T) = Float64(coeffs[ivar])
-_eval_D(coeffs::AbstractDiffusionCoefficients, ivar::Int, ix::Int, T) = get_D(coeffs, ivar, ix, T)
-
+function _eval_D(coeffs::AbstractDiffusionCoefficients, ivar::Int, ix::Int, T)
+    get_D(coeffs, ivar, ix, T)
+end
 
 # ---------------------------------------------------------------------------
 # Helper — variable indices that this operator couples spatially (inter-node).
@@ -12,7 +13,6 @@ _eval_D(coeffs::AbstractDiffusionCoefficients, ivar::Int, ix::Int, T) = get_D(co
 # ---------------------------------------------------------------------------
 
 diffusion_variable_indices(::AbstractOperator, layout) = Int[]
-
 
 # ===========================================================================
 # LinearDiffusionOperator
@@ -40,26 +40,28 @@ struct LinearDiffusionOperator{C, S, B, TP} <: AbstractDiffusionOperator
     temperature::TP
 end
 
-LinearDiffusionOperator(coefficients, selector, bc) =
+function LinearDiffusionOperator(coefficients, selector, bc)
     LinearDiffusionOperator(coefficients, selector, bc, nothing)
+end
 
 supports_rhs(::LinearDiffusionOperator) = true
 supports_jacobian(::LinearDiffusionOperator) = true
 
 diffusion_variable_indices(op::LinearDiffusionOperator, layout) = op.selector(layout)
-jacobian_node_sparsity(op::LinearDiffusionOperator, layout) =
-    Set{Tuple{Int,Int}}((iv, iv) for iv in op.selector(layout))
+function jacobian_node_sparsity(op::LinearDiffusionOperator, layout)
+    Set{Tuple{Int, Int}}((iv, iv) for iv in op.selector(layout))
+end
 
 function rhs!(du, op::LinearDiffusionOperator, u, ctx::SystemContext, t)
     layout = ctx.layout
-    nx     = ctx.nx
-    dx     = ctx.mesh.dx
+    nx = ctx.nx
+    dx = ctx.mesh.dx
     invdx2 = inv(dx * dx)
 
     T_val = op.temperature !== nothing ?
-        Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
+            Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
 
-    U  = state_view(u, layout, nx)
+    U = state_view(u, layout, nx)
     dU = state_view(du, layout, nx)
 
     vars = op.selector(layout)
@@ -81,13 +83,13 @@ end
 
 function jacobian!(J, op::LinearDiffusionOperator, u, ctx::SystemContext, t)
     layout = ctx.layout
-    nx     = ctx.nx
-    dx     = ctx.mesh.dx
+    nx = ctx.nx
+    dx = ctx.mesh.dx
     invdx2 = inv(dx * dx)
-    nvars  = nvariables(layout)
+    nvars = nvariables(layout)
 
     T_val = op.temperature !== nothing ?
-        Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
+            Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
 
     vars = op.selector(layout)
 
@@ -95,24 +97,23 @@ function jacobian!(J, op::LinearDiffusionOperator, u, ctx::SystemContext, t)
         D = _eval_D(op.coefficients, ivar, 1, T_val)
 
         r = ivar
-        J[r, r]          += -D * invdx2
-        J[r, r + nvars]  +=  D * invdx2
+        J[r, r] += -D * invdx2
+        J[r, r + nvars] += D * invdx2
 
         for ix in 2:(nx - 1)
             r = (ix - 1) * nvars + ivar
-            J[r, r - nvars] +=  D * invdx2
-            J[r, r]         += -2 * D * invdx2
-            J[r, r + nvars] +=  D * invdx2
+            J[r, r - nvars] += D * invdx2
+            J[r, r] += -2 * D * invdx2
+            J[r, r + nvars] += D * invdx2
         end
 
         r = (nx - 1) * nvars + ivar
-        J[r, r - nvars] +=  D * invdx2
-        J[r, r]         += -D * invdx2
+        J[r, r - nvars] += D * invdx2
+        J[r, r] += -D * invdx2
     end
 
     return J
 end
-
 
 # ===========================================================================
 # WeakDirichletBoundaryOperator  (ghost-node correction, formerly DirichletBoundaryOperator)
@@ -142,8 +143,8 @@ struct WeakDirichletBoundaryOperator{C, S, TP, L, R} <: AbstractDiffusionOperato
     right::R   # Union{Nothing, callable f(t) -> value}
 end
 
-function WeakDirichletBoundaryOperator(selector, coefficients, temperature=nothing;
-                                        left=nothing, right=nothing)
+function WeakDirichletBoundaryOperator(selector, coefficients, temperature = nothing;
+        left = nothing, right = nothing)
     return WeakDirichletBoundaryOperator(selector, coefficients, temperature, left, right)
 end
 
@@ -151,19 +152,20 @@ supports_rhs(::WeakDirichletBoundaryOperator) = true
 supports_jacobian(::WeakDirichletBoundaryOperator) = true
 
 diffusion_variable_indices(op::WeakDirichletBoundaryOperator, layout) = op.selector(layout)
-jacobian_node_sparsity(op::WeakDirichletBoundaryOperator, layout) =
-    Set{Tuple{Int,Int}}((iv, iv) for iv in op.selector(layout))
+function jacobian_node_sparsity(op::WeakDirichletBoundaryOperator, layout)
+    Set{Tuple{Int, Int}}((iv, iv) for iv in op.selector(layout))
+end
 
 function rhs!(du, op::WeakDirichletBoundaryOperator, u, ctx::SystemContext, t)
     layout = ctx.layout
-    nx     = ctx.nx
-    dx     = ctx.mesh.dx
+    nx = ctx.nx
+    dx = ctx.mesh.dx
     invdx2 = inv(dx * dx)
 
     T_val = op.temperature !== nothing ?
-        Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
+            Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
 
-    U  = state_view(u, layout, nx)
+    U = state_view(u, layout, nx)
     dU = state_view(du, layout, nx)
 
     vars = op.selector(layout)
@@ -187,13 +189,13 @@ end
 
 function jacobian!(J, op::WeakDirichletBoundaryOperator, u, ctx::SystemContext, t)
     layout = ctx.layout
-    nx     = ctx.nx
-    dx     = ctx.mesh.dx
+    nx = ctx.nx
+    dx = ctx.mesh.dx
     invdx2 = inv(dx * dx)
-    nvars  = nvariables(layout)
+    nvars = nvariables(layout)
 
     T_val = op.temperature !== nothing ?
-        Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
+            Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
 
     vars = op.selector(layout)
 
@@ -214,7 +216,6 @@ function jacobian!(J, op::WeakDirichletBoundaryOperator, u, ctx::SystemContext, 
     return J
 end
 
-
 # ===========================================================================
 # Strong DirichletBoundaryOperator — four enforcement methods, per side
 # ===========================================================================
@@ -228,7 +229,7 @@ Compatible with all ODE solvers but adds stiffness proportional to λ.
 """
 struct PenaltyMethod
     lambda::Float64
-    PenaltyMethod(λ=1e10) = new(Float64(λ))
+    PenaltyMethod(λ = 1e10) = new(Float64(λ))
 end
 
 """
@@ -305,34 +306,37 @@ struct DirichletBoundaryOperator{M, S, C, TP, G} <: AbstractDiffusionOperator
 end
 
 function DirichletBoundaryOperator(side::Symbol, bc_fn, selector,
-                                    coefficients=nothing, temperature=nothing;
-                                    method=PenaltyMethod())
-    side in (:left, :right) || throw(ArgumentError("side must be :left or :right, got :$side"))
-    return DirichletBoundaryOperator(method, side, bc_fn, selector, coefficients, temperature)
+        coefficients = nothing, temperature = nothing;
+        method = PenaltyMethod())
+    side in (:left, :right) ||
+        throw(ArgumentError("side must be :left or :right, got :$side"))
+    return DirichletBoundaryOperator(
+        method, side, bc_fn, selector, coefficients, temperature)
 end
 
 diffusion_variable_indices(op::DirichletBoundaryOperator, layout) = op.selector(layout)
 
-
 # --- supports_* traits per method ---
 
 supports_rhs(::DirichletBoundaryOperator) = true
-supports_jacobian(::DirichletBoundaryOperator{<:PenaltyMethod})    = true
+supports_jacobian(::DirichletBoundaryOperator{<:PenaltyMethod}) = true
 supports_jacobian(::DirichletBoundaryOperator{<:MassMatrixMethod}) = true
-supports_jacobian(::DirichletBoundaryOperator{<:CallbackMethod})   = true
+supports_jacobian(::DirichletBoundaryOperator{<:CallbackMethod}) = true
 supports_jacobian(::DirichletBoundaryOperator{<:EliminatedMethod}) = true
 
 supports_mass_matrix(op::DirichletBoundaryOperator{<:MassMatrixMethod}) = true
 
-jacobian_node_sparsity(op::DirichletBoundaryOperator{<:PenaltyMethod}, layout) =
-    Set{Tuple{Int,Int}}((iv, iv) for iv in op.selector(layout))
-jacobian_node_sparsity(op::DirichletBoundaryOperator{<:MassMatrixMethod}, layout) =
-    Set{Tuple{Int,Int}}((iv, iv) for iv in op.selector(layout))
-jacobian_node_sparsity(::DirichletBoundaryOperator{<:CallbackMethod}, layout) =
-    Set{Tuple{Int,Int}}()
+function jacobian_node_sparsity(op::DirichletBoundaryOperator{<:PenaltyMethod}, layout)
+    Set{Tuple{Int, Int}}((iv, iv) for iv in op.selector(layout))
+end
+function jacobian_node_sparsity(op::DirichletBoundaryOperator{<:MassMatrixMethod}, layout)
+    Set{Tuple{Int, Int}}((iv, iv) for iv in op.selector(layout))
+end
+function jacobian_node_sparsity(::DirichletBoundaryOperator{<:CallbackMethod}, layout)
+    Set{Tuple{Int, Int}}()
+end
 # EliminatedMethod modifies inter-node entries → cannot be captured in a per-node pattern
 jacobian_node_sparsity(::DirichletBoundaryOperator{<:EliminatedMethod}, layout) = nothing
-
 
 # ---------------------------------------------------------------------------
 # PenaltyMethod  rhs! / jacobian!
@@ -340,14 +344,14 @@ jacobian_node_sparsity(::DirichletBoundaryOperator{<:EliminatedMethod}, layout) 
 
 function rhs!(du, op::DirichletBoundaryOperator{<:PenaltyMethod}, u, ctx::SystemContext, t)
     layout = ctx.layout
-    nx     = ctx.nx
-    λ      = op.method.lambda
+    nx = ctx.nx
+    λ = op.method.lambda
 
-    U  = state_view(u, layout, nx)
+    U = state_view(u, layout, nx)
     dU = state_view(du, layout, nx)
 
     vars = op.selector(layout)
-    ix   = op.side === :left ? 1 : nx
+    ix = op.side === :left ? 1 : nx
 
     @inbounds for ivar in vars
         g = op.bc_fn(t)
@@ -357,14 +361,15 @@ function rhs!(du, op::DirichletBoundaryOperator{<:PenaltyMethod}, u, ctx::System
     return du
 end
 
-function jacobian!(J, op::DirichletBoundaryOperator{<:PenaltyMethod}, u, ctx::SystemContext, t)
+function jacobian!(
+        J, op::DirichletBoundaryOperator{<:PenaltyMethod}, u, ctx::SystemContext, t)
     layout = ctx.layout
-    nx     = ctx.nx
-    nvars  = nvariables(layout)
-    λ      = op.method.lambda
+    nx = ctx.nx
+    nvars = nvariables(layout)
+    λ = op.method.lambda
 
     vars = op.selector(layout)
-    ix   = op.side === :left ? 1 : nx
+    ix = op.side === :left ? 1 : nx
 
     @inbounds for ivar in vars
         r = (ix - 1) * nvars + ivar
@@ -374,20 +379,20 @@ function jacobian!(J, op::DirichletBoundaryOperator{<:PenaltyMethod}, u, ctx::Sy
     return J
 end
 
-
 # ---------------------------------------------------------------------------
 # MassMatrixMethod  rhs! / jacobian! / mass_matrix
 # ---------------------------------------------------------------------------
 
-function rhs!(du, op::DirichletBoundaryOperator{<:MassMatrixMethod}, u, ctx::SystemContext, t)
+function rhs!(
+        du, op::DirichletBoundaryOperator{<:MassMatrixMethod}, u, ctx::SystemContext, t)
     layout = ctx.layout
-    nx     = ctx.nx
+    nx = ctx.nx
 
-    U  = state_view(u, layout, nx)
+    U = state_view(u, layout, nx)
     dU = state_view(du, layout, nx)
 
     vars = op.selector(layout)
-    ix   = op.side === :left ? 1 : nx
+    ix = op.side === :left ? 1 : nx
 
     # Algebraic residual: f[boundary] = g(t) - u[boundary]  (→ u[boundary] = g(t))
     @inbounds for ivar in vars
@@ -398,13 +403,14 @@ function rhs!(du, op::DirichletBoundaryOperator{<:MassMatrixMethod}, u, ctx::Sys
     return du
 end
 
-function jacobian!(J, op::DirichletBoundaryOperator{<:MassMatrixMethod}, u, ctx::SystemContext, t)
+function jacobian!(
+        J, op::DirichletBoundaryOperator{<:MassMatrixMethod}, u, ctx::SystemContext, t)
     layout = ctx.layout
-    nx     = ctx.nx
-    nvars  = nvariables(layout)
+    nx = ctx.nx
+    nvars = nvariables(layout)
 
     vars = op.selector(layout)
-    ix   = op.side === :left ? 1 : nx
+    ix = op.side === :left ? 1 : nx
 
     @inbounds for ivar in vars
         r = (ix - 1) * nvars + ivar
@@ -422,13 +428,13 @@ Collected by `build_unsplit_problem` and passed to `ODEFunction`.
 """
 function mass_matrix(op::DirichletBoundaryOperator{<:MassMatrixMethod}, ctx::SystemContext)
     layout = ctx.layout
-    nx     = ctx.nx
-    nvars  = nvariables(layout)
-    n      = nvars * nx
+    nx = ctx.nx
+    nvars = nvariables(layout)
+    n = nvars * nx
 
-    m    = ones(Float64, n)
+    m = ones(Float64, n)
     vars = op.selector(layout)
-    ix   = op.side === :left ? 1 : nx
+    ix = op.side === :left ? 1 : nx
 
     @inbounds for ivar in vars
         idx = (ix - 1) * nvars + ivar
@@ -438,7 +444,6 @@ function mass_matrix(op::DirichletBoundaryOperator{<:MassMatrixMethod}, ctx::Sys
     return Diagonal(m)
 end
 
-
 # ---------------------------------------------------------------------------
 # CallbackMethod  rhs! / jacobian!  (no-ops; effect delivered via callback)
 # ---------------------------------------------------------------------------
@@ -447,7 +452,8 @@ function rhs!(du, op::DirichletBoundaryOperator{<:CallbackMethod}, u, ctx::Syste
     return du  # no ODE contribution — callback handles enforcement
 end
 
-function jacobian!(J, op::DirichletBoundaryOperator{<:CallbackMethod}, u, ctx::SystemContext, t)
+function jacobian!(
+        J, op::DirichletBoundaryOperator{<:CallbackMethod}, u, ctx::SystemContext, t)
     return J   # no Jacobian contribution
 end
 
@@ -458,12 +464,12 @@ Return a `DiscreteCallback` that resets the boundary node to `g(t)` after each
 accepted step.  Collected by `solve_problem(model, ...)` and passed to the solver.
 """
 function build_solver_callback(op::DirichletBoundaryOperator{<:CallbackMethod},
-                                model::SystemModel)
+        model::SystemModel)
     layout = model.layout
-    nx     = model.context.nx
-    nvars  = nvariables(layout)
-    vars   = op.selector(layout)
-    ix     = op.side === :left ? 1 : nx
+    nx = model.context.nx
+    nvars = nvariables(layout)
+    vars = op.selector(layout)
+    ix = op.side === :left ? 1 : nx
 
     idxs = [(ix - 1) * nvars + ivar for ivar in vars]
 
@@ -478,29 +484,29 @@ function build_solver_callback(op::DirichletBoundaryOperator{<:CallbackMethod},
     return DiscreteCallback(condition, affect!; save_positions = (false, false))
 end
 
-
 # ---------------------------------------------------------------------------
 # EliminatedMethod  rhs! / jacobian!
 # ---------------------------------------------------------------------------
 
-function rhs!(du, op::DirichletBoundaryOperator{<:EliminatedMethod}, u, ctx::SystemContext, t)
+function rhs!(
+        du, op::DirichletBoundaryOperator{<:EliminatedMethod}, u, ctx::SystemContext, t)
     layout = ctx.layout
-    nx     = ctx.nx
-    dx     = ctx.mesh.dx
+    nx = ctx.nx
+    dx = ctx.mesh.dx
     invdx2 = inv(dx * dx)
 
     T_val = op.temperature !== nothing ?
-        Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
+            Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
 
-    U  = state_view(u, layout, nx)
+    U = state_view(u, layout, nx)
     dU = state_view(du, layout, nx)
 
     vars = op.selector(layout)
-    g    = op.bc_fn(t)
+    g = op.bc_fn(t)
 
     # Finite-difference approximation of g'(t)
-    eps_t  = 1e-7 * max(1.0, abs(t))
-    g_dot  = (op.bc_fn(t + eps_t) - g) / eps_t
+    eps_t = 1e-7 * max(1.0, abs(t))
+    g_dot = (op.bc_fn(t + eps_t) - g) / eps_t
 
     if op.side === :left
         @inbounds for ivar in vars
@@ -524,15 +530,16 @@ function rhs!(du, op::DirichletBoundaryOperator{<:EliminatedMethod}, u, ctx::Sys
     return du
 end
 
-function jacobian!(J, op::DirichletBoundaryOperator{<:EliminatedMethod}, u, ctx::SystemContext, t)
+function jacobian!(
+        J, op::DirichletBoundaryOperator{<:EliminatedMethod}, u, ctx::SystemContext, t)
     layout = ctx.layout
-    nx     = ctx.nx
-    dx     = ctx.mesh.dx
+    nx = ctx.nx
+    dx = ctx.mesh.dx
     invdx2 = inv(dx * dx)
-    nvars  = nvariables(layout)
+    nvars = nvariables(layout)
 
     T_val = op.temperature !== nothing ?
-        Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
+            Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
 
     vars = op.selector(layout)
 
@@ -555,10 +562,10 @@ function jacobian!(J, op::DirichletBoundaryOperator{<:EliminatedMethod}, u, ctx:
         @inbounds for ivar in vars
             D = _eval_D(op.coefficients, ivar, 1, T_val)
 
-            r_nx  = (nx - 1) * nvars + ivar
+            r_nx = (nx - 1) * nvars + ivar
             r_nm1 = (nx - 2) * nvars + ivar
 
-            J[r_nx, r_nx]  += D * invdx2
+            J[r_nx, r_nx] += D * invdx2
             J[r_nx, r_nm1] -= D * invdx2
             J[r_nm1, r_nx] -= D * invdx2
         end
@@ -566,7 +573,6 @@ function jacobian!(J, op::DirichletBoundaryOperator{<:EliminatedMethod}, u, ctx:
 
     return J
 end
-
 
 # ===========================================================================
 # Generic fallback for build_solver_callback (returns nothing for non-callback operators)
@@ -578,7 +584,6 @@ end
 Default: no callback.  Override for `CallbackMethod` operators.
 """
 build_solver_callback(::AbstractOperator, ::SystemModel) = nothing
-
 
 # ===========================================================================
 # Surface flux computation
@@ -593,31 +598,31 @@ variable over all saved times.
 surface_fluxes(::AbstractDiffusionOperator, result) = Dict{Symbol, NamedTuple}()
 
 function _compute_surface_fluxes(selector, coefficients, temperature,
-                                  result::SimulationResult)
-    model  = result.model
+        result::SimulationResult)
+    model = result.model
     layout = model.layout
-    mesh   = model.context.mesh
-    dx     = mesh.dx
-    nx     = model.context.nx
-    vars   = selector(layout)
-    names  = variable_names(layout)
-    nt     = length(result.solution.u)
-    ctx    = model.context
+    mesh = model.context.mesh
+    dx = mesh.dx
+    nx = model.context.nx
+    vars = selector(layout)
+    names = variable_names(layout)
+    nt = length(result.solution.u)
+    ctx = model.context
 
     out = Dict{Symbol, NamedTuple}()
 
     for ivar in vars
-        left_flux  = zeros(Float64, nt)
+        left_flux = zeros(Float64, nt)
         right_flux = zeros(Float64, nt)
 
         for it in 1:nt
-            t     = result.solution.t[it]
+            t = result.solution.t[it]
             T_val = temperature !== nothing ?
-                Float64(temperature_at(temperature, ctx, t, 1)) : NaN
+                    Float64(temperature_at(temperature, ctx, t, 1)) : NaN
             D = _eval_D(coefficients, ivar, 1, T_val)
 
             U = state_view(result.solution.u[it], layout, nx)
-            left_flux[it]  = D * (U[ivar, 2]      - U[ivar, 1])  / dx
+            left_flux[it] = D * (U[ivar, 2] - U[ivar, 1]) / dx
             right_flux[it] = D * (U[ivar, nx - 1] - U[ivar, nx]) / dx
         end
 
@@ -636,6 +641,6 @@ function surface_fluxes(op::WeakDirichletBoundaryOperator, result::SimulationRes
 end
 
 function surface_fluxes(op::DirichletBoundaryOperator{<:EliminatedMethod},
-                         result::SimulationResult)
+        result::SimulationResult)
     return _compute_surface_fluxes(op.selector, op.coefficients, op.temperature, result)
 end

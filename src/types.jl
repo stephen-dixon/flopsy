@@ -33,8 +33,8 @@ end
 struct RunInfo
     run_id::String
     start_time::DateTime
-    config_path::Union{Nothing,String}
-    package_versions::Dict{String,String}
+    config_path::Union{Nothing, String}
+    package_versions::Dict{String, String}
 end
 
 """
@@ -44,7 +44,7 @@ Typed container representing a fully assembled simulation ready to execute.
 This is the hand-off boundary between the config/problem-template layer and the
 core solver framework.
 """
-struct SimulationProblem{M,U,T,S,C}
+struct SimulationProblem{M, U, T, S, C}
     model::M
     u0::U
     tspan::T
@@ -58,7 +58,7 @@ end
 Runtime context passed to every operator call.  Holds the mesh, node count,
 variable layout, auxiliary data, and scratch buffers.
 """
-struct SystemContext{L,M,A,S}
+struct SystemContext{L, M, A, S}
     layout::L
     nx::Int
     mesh::M
@@ -71,7 +71,7 @@ end
 
 Assembled model combining a `VariableLayout`, operator NamedTuple, and `SystemContext`.
 """
-struct SystemModel{L,O,C} <: AbstractSystemModel
+struct SystemModel{L, O, C} <: AbstractSystemModel
     layout::L
     operators::O
     context::C
@@ -89,7 +89,7 @@ Configuration for the time integrator.
 - `dt`          — initial step size hint (nothing = auto)
 - `kwargs`      — extra keyword arguments forwarded to `SciMLBase.solve`
 """
-Base.@kwdef struct SolverConfig{F,A,AT,RT,S,D,K}
+Base.@kwdef struct SolverConfig{F, A, AT, RT, S, D, K}
     formulation::F
     algorithm::A
     abstol::AT = 1e-8
@@ -110,10 +110,10 @@ from a completed simulation.  Access fields with the output helper functions:
 `variable_timeseries`, `variable_snapshot`, `integrated_variable`,
 `surface_diffusive_fluxes`, `build_summary_dataframe`, etc.
 """
-struct SimulationResult{M,S,C}
+struct SimulationResult{M, S, C}
     model::M
     solution::S
     config::C
-    summaries::Dict{Symbol,Any}
-    metadata::Dict{String,Any}
+    summaries::Dict{Symbol, Any}
+    metadata::Dict{String, Any}
 end

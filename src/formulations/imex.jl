@@ -23,13 +23,14 @@ config = SolverConfig(
 result = solve_problem(model, u0, (0.0, t_end), config)
 ```
 """
-function build_problem(model::SystemModel, u0, tspan, ::IMEXFormulation, solver_config::SolverConfig)
+function build_problem(
+        model::SystemModel, u0, tspan, ::IMEXFormulation, solver_config::SolverConfig)
     # Partition operators into stiff (diffusion + boundary) and non-stiff (reaction).
-    stiff_ops    = Tuple(filter(!isnothing, [model.operators.diffusion,
-                                             model.operators.boundary]))
+    stiff_ops = Tuple(filter(!isnothing, [model.operators.diffusion,
+        model.operators.boundary]))
     nonstiff_ops = Tuple(filter(!isnothing, [model.operators.reaction]))
 
-    stiff_op    = isempty(stiff_ops)    ? NullOperator() : OperatorSum(stiff_ops)
+    stiff_op = isempty(stiff_ops) ? NullOperator() : OperatorSum(stiff_ops)
     nonstiff_op = isempty(nonstiff_ops) ? NullOperator() : OperatorSum(nonstiff_ops)
 
     ctx = model.context
@@ -71,7 +72,6 @@ function build_problem(model::SystemModel, u0, tspan, ::IMEXFormulation, solver_
     return SplitODEProblem(f1_sciml, f2_sciml, u0, tspan)
 end
 
-
 """
     build_problem(model, u0, tspan, ::IMEXReactionFormulation, solver_config) -> SplitODEProblem
 
@@ -85,12 +85,12 @@ Assemble a `SplitODEProblem` for IMEX integration with the reaction partition im
 Use with `KenCarp4()` or similar IMEX algorithms.
 """
 function build_problem(model::SystemModel, u0, tspan, ::IMEXReactionFormulation,
-                        solver_config::SolverConfig)
-    stiff_ops    = Tuple(filter(!isnothing, [model.operators.reaction]))
+        solver_config::SolverConfig)
+    stiff_ops = Tuple(filter(!isnothing, [model.operators.reaction]))
     nonstiff_ops = Tuple(filter(!isnothing, [model.operators.diffusion,
-                                             model.operators.boundary]))
+        model.operators.boundary]))
 
-    stiff_op    = isempty(stiff_ops)    ? NullOperator() : OperatorSum(stiff_ops)
+    stiff_op = isempty(stiff_ops) ? NullOperator() : OperatorSum(stiff_ops)
     nonstiff_op = isempty(nonstiff_ops) ? NullOperator() : OperatorSum(nonstiff_ops)
 
     ctx = model.context

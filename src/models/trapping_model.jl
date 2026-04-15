@@ -7,14 +7,13 @@ Variables:
 - mobile variable: tagged with `:reaction` and `:diffusion`
 - trap variable:   tagged with `:reaction`
 """
-function trapping_variable_layout(; mobile_name::Symbol=:c, trap_name::Symbol=:theta)
+function trapping_variable_layout(; mobile_name::Symbol = :c, trap_name::Symbol = :theta)
     vars = [
         VariableInfo(mobile_name, :mobile, Set([:reaction, :diffusion])),
-        VariableInfo(trap_name, :trap, Set([:reaction])),
+        VariableInfo(trap_name, :trap, Set([:reaction]))
     ]
     return VariableLayout(vars)
 end
-
 
 """
     build_trapping_model(; ...)
@@ -32,17 +31,17 @@ Arguments:
 - `aux`: additional auxiliary data
 """
 function build_trapping_model(;
-    mesh::Mesh1D,
-    k_trap::Real,
-    k_detrap::Real,
-    diffusion_coefficient,
-    mobile_name::Symbol=:c,
-    trap_name::Symbol=:theta,
-    aux=NamedTuple(),
+        mesh::Mesh1D,
+        k_trap::Real,
+        k_detrap::Real,
+        diffusion_coefficient,
+        mobile_name::Symbol = :c,
+        trap_name::Symbol = :theta,
+        aux = NamedTuple()
 )
     layout = trapping_variable_layout(
-        mobile_name=mobile_name,
-        trap_name=trap_name,
+        mobile_name = mobile_name,
+        trap_name = trap_name
     )
 
     mobile_idx = 1
@@ -52,7 +51,7 @@ function build_trapping_model(;
         k_trap,
         k_detrap,
         mobile_idx,
-        trap_idx,
+        trap_idx
     )
 
     selector(layout::VariableLayout) = variables_with_tag(layout, :diffusion)
@@ -70,10 +69,10 @@ function build_trapping_model(;
     diffusion = LinearDiffusionOperator(coeffs, selector, nothing)
 
     return build_rd_model(
-        layout=layout,
-        mesh=mesh,
-        reaction=reaction,
-        diffusion=diffusion,
-        aux=aux,
+        layout = layout,
+        mesh = mesh,
+        reaction = reaction,
+        diffusion = diffusion,
+        aux = aux
     )
 end

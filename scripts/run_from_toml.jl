@@ -1,7 +1,8 @@
 using Flopsy
 
 function main(args)
-    length(args) == 1 || error("usage: julia --project=. scripts/run_from_toml.jl <input.toml>")
+    length(args) == 1 ||
+        error("usage: julia --project=. scripts/run_from_toml.jl <input.toml>")
     cfg = load_config(args[1])
     problem = build_problem(cfg)
     result = solve(problem)

@@ -1,5 +1,4 @@
 @testset "Diffusion coefficients" begin
-
     @testset "Plain vector (constant)" begin
         coeffs = [1.0, 0.0, 2.5]
         @test get_D(coeffs, 1, 1, 300.0) == 1.0

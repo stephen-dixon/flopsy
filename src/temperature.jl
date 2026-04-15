@@ -6,7 +6,6 @@ node and time.  Implement `temperature_at(provider, ctx, t, ix)`.
 """
 abstract type AbstractTemperatureProvider end
 
-
 """
     ConstantTemperature(value)
 
@@ -22,7 +21,6 @@ end
 Return the temperature in Kelvin at node `ix` and time `t`.
 """
 temperature_at(tp::ConstantTemperature, ctx, t, ix) = tp.value
-
 
 """
     LinearRampTemperature(T0, ramp_rate)
@@ -40,7 +38,6 @@ struct LinearRampTemperature{T} <: AbstractTemperatureProvider
 end
 
 temperature_at(tp::LinearRampTemperature, ctx, t, ix) = tp.T0 + tp.ramp_rate * t
-
 
 """
     FunctionTemperature(f)

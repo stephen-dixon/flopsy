@@ -4,13 +4,13 @@ function instantiate(::Trapping1DTemplate, cfg::ProblemConfig)
     mesh = _build_mesh(cfg.mesh)
     diffusion = ConstantDiffusion([
         _get_parameter(cfg, :diffusion_coefficient, 0.01),
-        0.0,
+        0.0
     ])
     model = build_trapping_model(
         mesh = mesh,
         k_trap = _get_parameter(cfg, :k_trap, 5.0),
         k_detrap = _get_parameter(cfg, :k_detrap, 0.5),
-        diffusion_coefficient = diffusion,
+        diffusion_coefficient = diffusion
     )
 
     u0 = zeros(Float64, nvariables(model.layout) * mesh_nx(mesh))

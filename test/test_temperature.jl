@@ -2,7 +2,7 @@
     nx = 5
     mesh = Mesh1D(1.0, nx)
     layout = VariableLayout([VariableInfo(:u, :state, Set{Symbol}())])
-    ctx = SystemContext(layout, nx, mesh, Dict{Symbol,Any}(), Dict{Symbol,Any}())
+    ctx = SystemContext(layout, nx, mesh, Dict{Symbol, Any}(), Dict{Symbol, Any}())
 
     @testset "ConstantTemperature" begin
         tp = ConstantTemperature(300.0)

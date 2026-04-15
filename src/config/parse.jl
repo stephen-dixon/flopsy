@@ -28,7 +28,7 @@ function parse_config(raw::AbstractDict)
         mesh,
         solver,
         bcs,
-        parameters,
+        parameters
     )
 end
 
@@ -44,13 +44,13 @@ function _normalize_legacy_config(raw::AbstractDict)
     formulation = get(raw, "formulation", "unsplit")
     algorithm = get(raw, "algorithm", "Rodas5")
 
-    normalized = Dict{String,Any}()
+    normalized = Dict{String, Any}()
     normalized["problem_type"] = _normalize_problem_type(problem_type)
     normalized["mesh"] = Dict(
         "kind" => "uniform_1d",
         "nx" => get(raw, "nx", 101),
         "xmin" => 0.0,
-        "xmax" => length_domain,
+        "xmax" => length_domain
     )
     normalized["solver"] = Dict(
         "formulation" => formulation,
@@ -58,11 +58,11 @@ function _normalize_legacy_config(raw::AbstractDict)
         "dt" => get(raw, "dt", nothing),
         "abstol" => get(raw, "abstol", 1e-8),
         "reltol" => get(raw, "reltol", 1e-6),
-        "saveat" => saveat_raw,
+        "saveat" => saveat_raw
     )
     normalized["parameters"] = Dict(
         "t0" => tspan_raw[1],
-        "tend" => tspan_raw[2],
+        "tend" => tspan_raw[2]
     )
 
     passthrough = (
@@ -73,7 +73,7 @@ function _normalize_legacy_config(raw::AbstractDict)
         "temperature",
         "initial_pulse_amplitude",
         "initial_mobile_pulse_amplitude",
-        "initial_trap_occupancy",
+        "initial_trap_occupancy"
     )
     for key in passthrough
         if haskey(raw, key)
@@ -89,7 +89,7 @@ function _parse_mesh_config(raw::AbstractDict)
         Symbol(get(raw, "kind", "uniform_1d")),
         Int(get(raw, "nx", 101)),
         Float64(get(raw, "xmin", 0.0)),
-        Float64(get(raw, "xmax", get(raw, "length", 1.0))),
+        Float64(get(raw, "xmax", get(raw, "length", 1.0)))
     )
 end
 
@@ -104,31 +104,34 @@ function _parse_input_solver_config(raw::AbstractDict)
         dt,
         Float64(get(raw, "abstol", 1e-8)),
         Float64(get(raw, "reltol", 1e-6)),
-        saveat,
+        saveat
     )
 end
 
 function _parse_boundary_conditions(raw)
-    isa(raw, AbstractVector) || throw(ArgumentError("boundary_conditions must be an array of tables"))
+    isa(raw, AbstractVector) ||
+        throw(ArgumentError("boundary_conditions must be an array of tables"))
     bcs = BoundaryConditionConfig{Float64}[]
     for item in raw
-        item isa AbstractDict || throw(ArgumentError("boundary condition entries must be TOML tables"))
-        push!(bcs, BoundaryConditionConfig(
-            Symbol(get(item, "variable", "u")),
-            Symbol(_required_string(item, "side")),
-            Symbol(get(item, "kind", "dirichlet")),
-            Float64(get(item, "value", 0.0)),
-            Symbol(get(item, "method", "weak")),
-        ))
+        item isa AbstractDict ||
+            throw(ArgumentError("boundary condition entries must be TOML tables"))
+        push!(bcs,
+            BoundaryConditionConfig(
+                Symbol(get(item, "variable", "u")),
+                Symbol(_required_string(item, "side")),
+                Symbol(get(item, "kind", "dirichlet")),
+                Float64(get(item, "value", 0.0)),
+                Symbol(get(item, "method", "weak"))
+            ))
     end
     return bcs
 end
 
 function _parse_parameters(cfg::AbstractDict)
-    raw = get(cfg, "parameters", Dict{String,Any}())
+    raw = get(cfg, "parameters", Dict{String, Any}())
     raw isa AbstractDict || throw(ArgumentError("parameters must be a TOML table"))
 
-    params = Dict{Symbol,Float64}()
+    params = Dict{Symbol, Float64}()
     for (key, value) in pairs(raw)
         if value isa Real
             params[Symbol(key)] = Float64(value)
@@ -148,7 +151,8 @@ end
 function _parse_saveat(value)
     value === nothing && return nothing
     value isa Real && return [Float64(value)]
-    value isa AbstractVector || throw(ArgumentError("solver.saveat must be a number, array, or omitted"))
+    value isa AbstractVector ||
+        throw(ArgumentError("solver.saveat must be a number, array, or omitted"))
     return Float64[Float64(v) for v in value]
 end
 

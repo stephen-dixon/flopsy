@@ -33,7 +33,6 @@ using TOML
 using SciMLBase
 using OrdinaryDiffEq
 
-
 # ---------------------------------------------------------------------------
 # 1.  Palioxis model
 # ---------------------------------------------------------------------------
@@ -44,9 +43,9 @@ const XML_FILE = get(ENV, "PALIOXIS_XML", "traps.xml")
 pal = MultipleDefectModel(XML_FILE)
 report(pal)
 
-@assert get_n_gas(pal)        == 1  "expected 1 mobile species"
-@assert get_n_trap_types(pal) == 1  "expected 1 defect/trap type"
-@assert get_n_ne_traps(pal)   == 6  "expected 6 occupancy-level DOFs"
+@assert get_n_gas(pal) == 1 "expected 1 mobile species"
+@assert get_n_trap_types(pal) == 1 "expected 1 defect/trap type"
+@assert get_n_ne_traps(pal) == 6 "expected 6 occupancy-level DOFs"
 
 println("Mobile species : ", gas_names(pal))
 println("Trap species   : ", trap_names(pal))
@@ -56,7 +55,7 @@ println("Defect names   : ", defect_names(pal))
 # 2.  Spatial mesh
 # ---------------------------------------------------------------------------
 
-const L  = 1.0e-3   # sample thickness [m]
+const L = 1.0e-3   # sample thickness [m]
 const NX = 200
 
 mesh = Mesh1D(L, NX)
@@ -72,13 +71,13 @@ defects = fill(RHO_DEFECT, get_n_trap_types(pal), NX)   # (n_traps, nx)
 # 4.  Time structure
 # ---------------------------------------------------------------------------
 
-const t_load     = 24.0 * 3600.0
+const t_load = 24.0 * 3600.0
 const t_rest_end = t_load + 2.0 * 3600.0
 
 const T_RAMP_START = 300.0
-const T_RAMP_END   = 1200.0
-const RAMP_RATE    = 10.0 / 60.0           # K/s  (10 K/min)
-const t_tds_end    = t_rest_end + (T_RAMP_END - T_RAMP_START) / RAMP_RATE
+const T_RAMP_END = 1200.0
+const RAMP_RATE = 10.0 / 60.0           # K/s  (10 K/min)
+const t_tds_end = t_rest_end + (T_RAMP_END - T_RAMP_START) / RAMP_RATE
 
 const tspan = (0.0, t_tds_end)
 
@@ -109,11 +108,11 @@ const C_SURFACE_LOAD = 1.0e-10
 
 model = build_palioxis_trapping_model(
     palioxis_model = pal,
-    mesh           = mesh,
-    defects        = defects,
-    temperature    = temperature,
-    left_bc        = t -> t < t_load ? C_SURFACE_LOAD : 0.0,
-    right_bc       = t -> 0.0,
+    mesh = mesh,
+    defects = defects,
+    temperature = temperature,
+    left_bc = t -> t < t_load ? C_SURFACE_LOAD : 0.0,
+    right_bc = t -> 0.0
 )
 
 println("\nVariable layout:")
@@ -149,21 +148,21 @@ state_view(u0, model.layout, NX)[1, 1] = C_SURFACE_LOAD
 # ---------------------------------------------------------------------------
 
 saveat = sort(unique(vcat(
-    collect(range(0.0,        t_load,     step = 1800.0)),
-    collect(range(t_load,     t_rest_end, step = 300.0)),
-    collect(range(t_rest_end, t_tds_end,  step = 10.0)),
-    [t_tds_end],
+    collect(range(0.0, t_load, step = 1800.0)),
+    collect(range(t_load, t_rest_end, step = 300.0)),
+    collect(range(t_rest_end, t_tds_end, step = 10.0)),
+    [t_tds_end]
 )))
 
 solver_config = SolverConfig(
     formulation = UnsplitFormulation(),
-    algorithm   = Rodas5(autodiff = AutoFiniteDiff()),
-    abstol      = 1e-10,
-    reltol      = 1e-8,
-    saveat      = saveat,
+    algorithm = Rodas5(autodiff = AutoFiniteDiff()),
+    abstol = 1e-10,
+    reltol = 1e-8,
+    saveat = saveat
 )
 
-print_run_banner(Dict{String,Any}(), solver_config, model)
+print_run_banner(Dict{String, Any}(), solver_config, model)
 
 # ---------------------------------------------------------------------------
 # 9.  Solve
@@ -177,33 +176,33 @@ println("Solve complete: retcode = $(sol.retcode)  wall time = $(round(t_wall; d
 # ---------------------------------------------------------------------------
 
 # Compute temperature and total inventory at every saved time for the CSV.
-t_saved  = sol.t
-T_saved  = T_profile.(t_saved)
+t_saved = sol.t
+T_saved = T_profile.(t_saved)
 
 tmp_result = wrap_result(model, sol, nothing)
-all_names  = variable_names(model.layout)
-total_inv  = sum(integrated_variable(tmp_result, name) for name in all_names)
+all_names = variable_names(model.layout)
+total_inv = sum(integrated_variable(tmp_result, name) for name in all_names)
 
 result = wrap_result(
     model, sol, nothing;
-    summaries = Dict{Symbol,Any}(
+    summaries = Dict{Symbol, Any}(
         :extra_timeseries => Dict(
-            "temperature_K"   => T_saved,
-            "total_inventory" => total_inv,
-        ),
+        "temperature_K" => T_saved,
+        "total_inventory" => total_inv
     ),
-    metadata = Dict{String,Any}(
-        "model_type"       => "tds_palioxis",
-        "xml_file"         => XML_FILE,
-        "L_m"              => L,
-        "nx"               => NX,
-        "rho_defect"       => RHO_DEFECT,
-        "T_loading_K"      => 400.0,
-        "T_rest_K"         => 300.0,
-        "ramp_rate_K_per_s"=> RAMP_RATE,
-        "retcode"          => string(sol.retcode),
-        "walltime_s"       => t_wall,
     ),
+    metadata = Dict{String, Any}(
+        "model_type" => "tds_palioxis",
+        "xml_file" => XML_FILE,
+        "L_m" => L,
+        "nx" => NX,
+        "rho_defect" => RHO_DEFECT,
+        "T_loading_K" => 400.0,
+        "T_rest_K" => 300.0,
+        "ramp_rate_K_per_s" => RAMP_RATE,
+        "retcode" => string(sol.retcode),
+        "walltime_s" => t_wall
+    )
 )
 
 # Summary CSV columns:
@@ -220,13 +219,13 @@ println("Written: tds_fields.h5")
 # 11.  Quick diagnostics: peak desorption temperature
 # ---------------------------------------------------------------------------
 
-fluxes     = surface_diffusive_fluxes(result)
+fluxes = surface_diffusive_fluxes(result)
 mobile_idx = first(variables_in_group(model.layout, :mobile))
 mobile_sym = variable_names(model.layout)[mobile_idx]
 
-i_ramp_start   = findfirst(>=(t_rest_end), t_saved)
+i_ramp_start = findfirst(>=(t_rest_end), t_saved)
 right_flux_ramp = fluxes[mobile_sym].right[i_ramp_start:end]
-T_ramp          = T_saved[i_ramp_start:end]
+T_ramp = T_saved[i_ramp_start:end]
 
 i_peak = argmax(right_flux_ramp)
 println("\nPeak right-surface desorption flux during TDS ramp:")

@@ -83,8 +83,8 @@ function mass_matrix(op::OperatorSum, ctx::SystemContext)
     isempty(mm_ops) && return nothing
 
     nvars = nvariables(ctx.layout)
-    n     = nvars * ctx.nx
-    m     = ones(Float64, n)
+    n = nvars * ctx.nx
+    m = ones(Float64, n)
 
     for sub in mm_ops
         M_sub = mass_matrix(sub, ctx)

@@ -13,39 +13,40 @@
     between successive grids should be ≥ 1.8.
     =#
 
-    D      = 1.0
-    u_fn(x)    = sin(π * x)
-    uxx_fn(x)  = -π^2 * sin(π * x)
+    D = 1.0
+    u_fn(x) = sin(π * x)
+    uxx_fn(x) = -π^2 * sin(π * x)
 
     function run_grid(nx)
-        mesh   = Mesh1D(1.0, nx)
-        x      = mesh.x
-        dx     = mesh.dx
-        vars   = [VariableInfo(:u, :state, Set([:diffusion]))]
+        mesh = Mesh1D(1.0, nx)
+        x = mesh.x
+        dx = mesh.dx
+        vars = [VariableInfo(:u, :state, Set([:diffusion]))]
         layout = VariableLayout(vars)
-        ctx    = SystemContext(layout, nx, mesh, Dict{Symbol,Any}(), Dict{Symbol,Any}())
+        ctx = SystemContext(layout, nx, mesh, Dict{Symbol, Any}(), Dict{Symbol, Any}())
 
         op = LinearDiffusionOperator([D], layout -> [1], nothing)
 
-        u  = u_fn.(x)
+        u = u_fn.(x)
         du = zeros(nx)
         rhs!(du, op, u, ctx, 0.0)   # du ≈ D * u_xx at each node
 
         # Restrict to interior nodes — boundary uses first-order one-sided stencil
-        interior   = 2:(nx - 1)
-        du_exact   = D .* uxx_fn.(x[interior])
-        l2_err     = sqrt(dx * sum((du[interior] .- du_exact).^2))
+        interior = 2:(nx - 1)
+        du_exact = D .* uxx_fn.(x[interior])
+        l2_err = sqrt(dx * sum((du[interior] .- du_exact) .^ 2))
         return dx, l2_err
     end
 
     # Grids: 16, 32, 64, 128, 256 nodes
-    grids  = [16, 32, 64, 128, 256]
+    grids = [16, 32, 64, 128, 256]
     errors = [run_grid(nx) for nx in grids]
-    dxs    = [e[1] for e in errors]
-    l2s    = [e[2] for e in errors]
+    dxs = [e[1] for e in errors]
+    l2s = [e[2] for e in errors]
 
     # Estimate convergence order between consecutive grid pairs
-    orders = [log(l2s[i] / l2s[i+1]) / log(dxs[i] / dxs[i+1]) for i in 1:length(grids)-1]
+    orders = [log(l2s[i] / l2s[i + 1]) / log(dxs[i] / dxs[i + 1])
+              for i in 1:(length(grids) - 1)]
 
     # Interior stencil is O(dx²): all observed orders should be ≥ 1.8
     @test all(orders .≥ 1.8)
@@ -62,23 +63,23 @@ end
     =#
 
     D = 2.0
-    u_fn(x)   = sin(2π * x)
+    u_fn(x) = sin(2π * x)
     uxx_fn(x) = -4π^2 * sin(2π * x)
 
     function run_grid(nx)
-        mesh   = Mesh1D(1.0, nx)
-        x      = mesh.x
-        dx     = mesh.dx
+        mesh = Mesh1D(1.0, nx)
+        x = mesh.x
+        dx = mesh.dx
         # Two variables; only var 1 diffuses
-        vars   = [VariableInfo(:u1, :state, Set([:diffusion])),
-                  VariableInfo(:u2, :state, Set([:nodiffusion]))]
+        vars = [VariableInfo(:u1, :state, Set([:diffusion])),
+            VariableInfo(:u2, :state, Set([:nodiffusion]))]
         layout = VariableLayout(vars)
-        ctx    = SystemContext(layout, nx, mesh, Dict{Symbol,Any}(), Dict{Symbol,Any}())
+        ctx = SystemContext(layout, nx, mesh, Dict{Symbol, Any}(), Dict{Symbol, Any}())
 
         op = LinearDiffusionOperator([D, 0.0], layout -> [1], nothing)
 
         # State: [u1[1], u2[1], u1[2], u2[2], ...] (nvars=2 layout)
-        u  = zeros(2 * nx)
+        u = zeros(2 * nx)
         dU = state_view(u, layout, nx)
         for ix in 1:nx
             dU[1, ix] = u_fn(x[ix])
@@ -94,17 +95,18 @@ end
         @test all(dU_out[2, :] .== 0.0)
 
         # Variable 1 interior: O(dx²)
-        interior  = 2:(nx - 1)
+        interior = 2:(nx - 1)
         du1_exact = D .* uxx_fn.(x[interior])
-        l2_err    = sqrt(dx * sum((dU_out[1, interior] .- du1_exact).^2))
+        l2_err = sqrt(dx * sum((dU_out[1, interior] .- du1_exact) .^ 2))
         return dx, l2_err
     end
 
-    grids  = [16, 32, 64, 128]
+    grids = [16, 32, 64, 128]
     errors = [run_grid(nx) for nx in grids]
-    dxs    = [e[1] for e in errors]
-    l2s    = [e[2] for e in errors]
+    dxs = [e[1] for e in errors]
+    l2s = [e[2] for e in errors]
 
-    orders = [log(l2s[i] / l2s[i+1]) / log(dxs[i] / dxs[i+1]) for i in 1:length(grids)-1]
+    orders = [log(l2s[i] / l2s[i + 1]) / log(dxs[i] / dxs[i + 1])
+              for i in 1:(length(grids) - 1)]
     @test all(orders .≥ 1.8)
 end

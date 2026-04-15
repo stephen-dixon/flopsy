@@ -32,8 +32,9 @@ config = SolverConfig(
 result = solve_problem(model, u0, (0.0, t_end), config)
 ```
 """
-function build_problem(model::SystemModel, u0, tspan, ::ResidualFormulation, solver_config::SolverConfig)
-    ops      = Tuple(active_operators(model))
+function build_problem(
+        model::SystemModel, u0, tspan, ::ResidualFormulation, solver_config::SolverConfig)
+    ops = Tuple(active_operators(model))
     total_op = OperatorSum(ops)
 
     supports_rhs(total_op) || throw(ArgumentError(
@@ -65,7 +66,6 @@ function build_problem(model::SystemModel, u0, tspan, ::ResidualFormulation, sol
     return ODEProblem(ode_f, u0, tspan)
 end
 
-
 """
     _build_mass_matrix(model) -> Diagonal
 
@@ -75,9 +75,9 @@ Build a diagonal mass matrix for the state vector:
 """
 function _build_mass_matrix(model::SystemModel)
     layout = model.context.layout
-    nx     = model.context.nx
-    nvars  = nvariables(layout)
-    n      = nvars * nx
+    nx = model.context.nx
+    nvars = nvariables(layout)
+    n = nvars * nx
 
     # Identify which variable indices are in the :trap group.
     trap_ivars = Set(variables_in_group(layout, :trap))

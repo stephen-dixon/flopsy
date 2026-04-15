@@ -40,7 +40,7 @@ See also `SplitSolution`, `SplitFormulation`.
 struct SplitProblem
     model::SystemModel
     u0::Vector{Float64}
-    tspan::Tuple{Float64,Float64}
+    tspan::Tuple{Float64, Float64}
     solver_config::SolverConfig
 end
 
@@ -62,19 +62,18 @@ end
 # used by Flopsy output helpers.
 Base.length(sol::SplitSolution) = length(sol.t)
 
-
 """
     build_problem(model, u0, tspan, ::SplitFormulation, solver_config) -> SplitProblem
 
 Return a `SplitProblem` that encapsulates everything needed for the splitting
 loop.  The actual integration is performed by `solve_problem(::SplitProblem, ...)`.
 """
-function build_problem(model::SystemModel, u0, tspan, ::SplitFormulation, solver_config::SolverConfig)
+function build_problem(
+        model::SystemModel, u0, tspan, ::SplitFormulation, solver_config::SolverConfig)
     return SplitProblem(model, collect(Float64, u0),
-                        (Float64(tspan[1]), Float64(tspan[2])),
-                        solver_config)
+        (Float64(tspan[1]), Float64(tspan[2])),
+        solver_config)
 end
-
 
 # ---------------------------------------------------------------------------
 # Internal splitting loop
@@ -82,16 +81,16 @@ end
 
 function _solve_split(prob::SplitProblem, solver_config::SolverConfig, ::LieSplit)
     t0, t_end = prob.tspan
-    Δt        = Float64(solver_config.dt)
-    model     = prob.model
-    ctx       = model.context
+    Δt = Float64(solver_config.dt)
+    model = prob.model
+    ctx = model.context
 
     react_ops = Tuple(filter(!isnothing, [model.operators.reaction]))
-    diff_ops  = Tuple(filter(!isnothing, [model.operators.diffusion,
-                                          model.operators.boundary]))
+    diff_ops = Tuple(filter(!isnothing, [model.operators.diffusion,
+        model.operators.boundary]))
 
     react_op = isempty(react_ops) ? NullOperator() : OperatorSum(react_ops)
-    diff_op  = isempty(diff_ops)  ? NullOperator() : OperatorSum(diff_ops)
+    diff_op = isempty(diff_ops) ? NullOperator() : OperatorSum(diff_ops)
 
     saveat = _build_saveat_vector(solver_config, t0, t_end)
 
@@ -110,10 +109,11 @@ function _solve_split(prob::SplitProblem, solver_config::SolverConfig, ::LieSpli
 
         # Lie: reaction sub-step → diffusion sub-step
         u = _solve_substep(react_op, ctx, u, t, dt, solver_config)
-        u = _solve_substep(diff_op,  ctx, u, t, dt, solver_config)
+        u = _solve_substep(diff_op, ctx, u, t, dt, solver_config)
 
         t += dt
-        save_index = _record_interval!(saved_t, saved_u, t_prev, u_prev, t, u, saveat, save_index)
+        save_index = _record_interval!(
+            saved_t, saved_u, t_prev, u_prev, t, u, saveat, save_index)
     end
 
     return SplitSolution(saved_t, saved_u, :Success)
@@ -121,16 +121,16 @@ end
 
 function _solve_split(prob::SplitProblem, solver_config::SolverConfig, ::StrangSplit)
     t0, t_end = prob.tspan
-    Δt        = Float64(solver_config.dt)
-    model     = prob.model
-    ctx       = model.context
+    Δt = Float64(solver_config.dt)
+    model = prob.model
+    ctx = model.context
 
     react_ops = Tuple(filter(!isnothing, [model.operators.reaction]))
-    diff_ops  = Tuple(filter(!isnothing, [model.operators.diffusion,
-                                          model.operators.boundary]))
+    diff_ops = Tuple(filter(!isnothing, [model.operators.diffusion,
+        model.operators.boundary]))
 
     react_op = isempty(react_ops) ? NullOperator() : OperatorSum(react_ops)
-    diff_op  = isempty(diff_ops)  ? NullOperator() : OperatorSum(diff_ops)
+    diff_op = isempty(diff_ops) ? NullOperator() : OperatorSum(diff_ops)
 
     saveat = _build_saveat_vector(solver_config, t0, t_end)
 
@@ -148,17 +148,17 @@ function _solve_split(prob::SplitProblem, solver_config::SolverConfig, ::StrangS
         u_prev = copy(u)
 
         # Strang: half reaction → full diffusion → half reaction
-        u = _solve_substep(react_op, ctx, u, t,          dt / 2, solver_config)
-        u = _solve_substep(diff_op,  ctx, u, t,          dt,     solver_config)
+        u = _solve_substep(react_op, ctx, u, t, dt / 2, solver_config)
+        u = _solve_substep(diff_op, ctx, u, t, dt, solver_config)
         u = _solve_substep(react_op, ctx, u, t + dt / 2, dt / 2, solver_config)
 
         t += dt
-        save_index = _record_interval!(saved_t, saved_u, t_prev, u_prev, t, u, saveat, save_index)
+        save_index = _record_interval!(
+            saved_t, saved_u, t_prev, u_prev, t, u, saveat, save_index)
     end
 
     return SplitSolution(saved_t, saved_u, :Success)
 end
-
 
 # ---------------------------------------------------------------------------
 # Sub-step helpers
@@ -166,8 +166,8 @@ end
 
 """Solve one operator sub-problem over [t, t+dt] starting from u."""
 function _solve_substep(op, ctx::SystemContext, u::Vector{Float64},
-                        t::Float64, dt::Float64,
-                        solver_config::SolverConfig)
+        t::Float64, dt::Float64,
+        solver_config::SolverConfig)
     op isa NullOperator && return u
 
     function f!(du, uv, p, tv)
@@ -182,14 +182,13 @@ function _solve_substep(op, ctx::SystemContext, u::Vector{Float64},
     sub_sol = SciMLBase.solve(
         sub_prob,
         solver_config.algorithm;
-        abstol         = solver_config.abstol,
-        reltol         = solver_config.reltol,
-        save_everystep = false,
+        abstol = solver_config.abstol,
+        reltol = solver_config.reltol,
+        save_everystep = false
     )
 
     return copy(sub_sol.u[end])
 end
-
 
 # ---------------------------------------------------------------------------
 # Utility helpers
@@ -202,7 +201,8 @@ function _build_saveat_vector(solver_config::SolverConfig, t0::Float64, t_end::F
     return sort!(Float64[s for s in saveat if t0 <= s <= t_end])
 end
 
-function _record_initial!(saved_t, saved_u, t::Float64, u::Vector{Float64}, saveat::Vector{Float64})
+function _record_initial!(
+        saved_t, saved_u, t::Float64, u::Vector{Float64}, saveat::Vector{Float64})
     if isempty(saveat)
         push!(saved_t, t)
         push!(saved_u, copy(u))
@@ -219,8 +219,8 @@ function _record_initial!(saved_t, saved_u, t::Float64, u::Vector{Float64}, save
 end
 
 function _record_interval!(saved_t, saved_u, t0::Float64, u0::Vector{Float64},
-                           t1::Float64, u1::Vector{Float64}, saveat::Vector{Float64},
-                           idx::Int)
+        t1::Float64, u1::Vector{Float64}, saveat::Vector{Float64},
+        idx::Int)
     if isempty(saveat)
         push!(saved_t, t1)
         push!(saved_u, copy(u1))
@@ -240,7 +240,7 @@ function _record_interval!(saved_t, saved_u, t0::Float64, u0::Vector{Float64},
 end
 
 function _interpolate_state(u0::Vector{Float64}, u1::Vector{Float64},
-                            t0::Float64, t1::Float64, t::Float64)
+        t0::Float64, t1::Float64, t::Float64)
     _is_close_time(t, t0) && return copy(u0)
     _is_close_time(t, t1) && return copy(u1)
     α = (t - t0) / (t1 - t0)

@@ -12,12 +12,11 @@ summary/metadata dicts into a `SimulationResult`.
 `Vector{Float64}` — these appear as additional columns in the summary CSV.
 """
 function wrap_result(model::SystemModel, sol, config;
-    summaries::Dict{Symbol,Any}=Dict{Symbol,Any}(),
-    metadata::Dict{String,Any}=Dict{String,Any}(),
+        summaries::Dict{Symbol, Any} = Dict{Symbol, Any}(),
+        metadata::Dict{String, Any} = Dict{String, Any}()
 )
     return SimulationResult(model, sol, config, summaries, metadata)
 end
-
 
 """
     variable_snapshot(result, var; time_index=length(result.solution.u))
@@ -26,7 +25,7 @@ Return the spatial profile of variable `var` at a given saved time index.
 
 `var` may be an integer variable index or a Symbol variable name.
 """
-function variable_snapshot(result::SimulationResult, var; time_index=length(result.solution.u))
+function variable_snapshot(result::SimulationResult, var; time_index = length(result.solution.u))
     model = result.model
     layout = model.layout
     nx = model.context.nx
@@ -35,7 +34,6 @@ function variable_snapshot(result::SimulationResult, var; time_index=length(resu
     U = state_view(result.solution.u[time_index], layout, nx)
     return copy(@view U[ivar, :])
 end
-
 
 """
     variable_timeseries(result, var)
@@ -59,7 +57,6 @@ function variable_timeseries(result::SimulationResult, var)
     return out
 end
 
-
 """
     integrated_variable(result, var)
 
@@ -78,7 +75,6 @@ function integrated_variable(result::SimulationResult, var)
     end
     return out
 end
-
 
 """
     surface_diffusive_fluxes(result) -> Dict{Symbol, NamedTuple}
@@ -106,7 +102,6 @@ function surface_diffusive_fluxes(result::SimulationResult)
     return surface_fluxes(diffop, result)
 end
 
-
 """
     build_summary_dataframe(result)
 
@@ -130,7 +125,7 @@ function build_summary_dataframe(result::SimulationResult)
 
     fluxes = surface_diffusive_fluxes(result)
     for (varname, fl) in pairs(fluxes)
-        df[!, Symbol("left_flux_",  varname)] = fl.left
+        df[!, Symbol("left_flux_", varname)] = fl.left
         df[!, Symbol("right_flux_", varname)] = fl.right
     end
 
@@ -144,7 +139,6 @@ function build_summary_dataframe(result::SimulationResult)
     return df
 end
 
-
 """
     write_summary_csv(result, path)
 
@@ -155,7 +149,6 @@ function write_summary_csv(result::SimulationResult, path::AbstractString)
     CSV.write(path, df)
     return path
 end
-
 
 """
     write_field_output_hdf5(result, path)
@@ -197,7 +190,6 @@ function write_field_output_hdf5(result::SimulationResult, path::AbstractString)
     return path
 end
 
-
 """
     load_ic_from_hdf5(path, model; time_index=:last) -> Vector{Float64}
 
@@ -226,9 +218,9 @@ sol = solve_problem(model_desorption, u0, (0.0, t_tds), solver_config)
 ```
 """
 function load_ic_from_hdf5(
-    path::AbstractString,
-    model::SystemModel;
-    time_index::Union{Int,Symbol} = :last,
+        path::AbstractString,
+        model::SystemModel;
+        time_index::Union{Int, Symbol} = :last
 )
     layout = model.layout
     nx = model.context.nx
@@ -256,7 +248,6 @@ function load_ic_from_hdf5(
 
     return u0
 end
-
 
 """
     check_mass_conservation(result; rtol=1e-3) -> NamedTuple
@@ -294,8 +285,8 @@ A `NamedTuple` with fields:
 """
 function check_mass_conservation(result::SimulationResult; rtol::Real = 1e-3)
     layout = result.model.layout
-    t      = result.solution.t
-    nt     = length(t)
+    t = result.solution.t
+    nt = length(t)
 
     # Total hydrogen at each saved time
     H = zeros(Float64, nt)
@@ -304,7 +295,7 @@ function check_mass_conservation(result::SimulationResult; rtol::Real = 1e-3)
     end
 
     # Compute mass-conserving surface flux (correct Dirichlet formula D*(U[bdy]-g)/dx)
-    fluxes     = _mass_conserving_boundary_fluxes(result)
+    fluxes = _mass_conserving_boundary_fluxes(result)
     total_flux = zeros(Float64, nt)
     for (_, fl) in pairs(fluxes)
         total_flux .+= fl.left .+ fl.right
@@ -313,25 +304,24 @@ function check_mass_conservation(result::SimulationResult; rtol::Real = 1e-3)
     # Cumulative integral via trapezoidal rule
     cum_flux = zeros(Float64, nt)
     for k in 2:nt
-        dt          = t[k] - t[k-1]
-        cum_flux[k] = cum_flux[k-1] + 0.5 * dt * (total_flux[k] + total_flux[k-1])
+        dt = t[k] - t[k - 1]
+        cum_flux[k] = cum_flux[k - 1] + 0.5 * dt * (total_flux[k] + total_flux[k - 1])
     end
 
-    H0             = H[1]
-    balance        = H .+ cum_flux          # should equal H0 at all times
-    denom          = max(abs(H0), 1e-30)
+    H0 = H[1]
+    balance = H .+ cum_flux          # should equal H0 at all times
+    denom = max(abs(H0), 1e-30)
     balance_errors = abs.(balance .- H0) ./ denom
-    max_rel_error  = maximum(balance_errors)
+    max_rel_error = maximum(balance_errors)
 
     return (
-        conserved          = max_rel_error ≤ rtol,
+        conserved = max_rel_error ≤ rtol,
         max_relative_error = max_rel_error,
-        total_hydrogen     = H,
-        cumulative_flux    = cum_flux,
-        balance            = balance,
+        total_hydrogen = H,
+        cumulative_flux = cum_flux,
+        balance = balance
     )
 end
-
 
 """
     _mass_conserving_boundary_fluxes(result) -> Dict{Symbol, NamedTuple}
@@ -345,27 +335,27 @@ This differs from `surface_diffusive_fluxes`, which uses `D*(U[2]-U[1])/dx`
 balance checks).
 """
 function _mass_conserving_boundary_fluxes(result::SimulationResult)
-    model  = result.model
+    model = result.model
     layout = model.layout
-    nx     = model.context.nx
-    dx     = model.context.mesh.dx
-    ctx    = model.context
-    t_arr  = result.solution.t
-    nt     = length(t_arr)
-    names  = variable_names(layout)
+    nx = model.context.nx
+    dx = model.context.mesh.dx
+    ctx = model.context
+    t_arr = result.solution.t
+    nt = length(t_arr)
+    names = variable_names(layout)
 
     fluxes = Dict{Symbol, NamedTuple}()
 
     bcop = model.operators.boundary
     bcop === nothing && return fluxes
 
-    _accumulate_weak_dirichlet_fluxes!(fluxes, bcop, result, layout, nx, dx, ctx, t_arr, nt, names)
+    _accumulate_weak_dirichlet_fluxes!(
+        fluxes, bcop, result, layout, nx, dx, ctx, t_arr, nt, names)
     return fluxes
 end
 
-
 function _accumulate_weak_dirichlet_fluxes!(fluxes, op::WeakDirichletBoundaryOperator,
-                                              result, layout, nx, dx, ctx, t_arr, nt, names)
+        result, layout, nx, dx, ctx, t_arr, nt, names)
     # Neither side has a BC → nothing to add
     op.left === nothing && op.right === nothing && return
 
@@ -376,9 +366,9 @@ function _accumulate_weak_dirichlet_fluxes!(fluxes, op::WeakDirichletBoundaryOpe
         end
 
         for it in 1:nt
-            t     = t_arr[it]
+            t = t_arr[it]
             T_val = op.temperature !== nothing ?
-                Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
+                    Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
             D = Flopsy._eval_D(op.coefficients, ivar, 1, T_val)
             U = state_view(result.solution.u[it], layout, nx)
 
@@ -394,18 +384,18 @@ end
 
 # OperatorSum as boundary: recurse into sub-operators
 function _accumulate_weak_dirichlet_fluxes!(fluxes, op::OperatorSum,
-                                              result, layout, nx, dx, ctx, t_arr, nt, names)
+        result, layout, nx, dx, ctx, t_arr, nt, names)
     for sub in op.ops
-        _accumulate_weak_dirichlet_fluxes!(fluxes, sub, result, layout, nx, dx, ctx, t_arr, nt, names)
+        _accumulate_weak_dirichlet_fluxes!(
+            fluxes, sub, result, layout, nx, dx, ctx, t_arr, nt, names)
     end
 end
 
 # Default: ignore operators that don't contribute a mass-conserving boundary flux
 function _accumulate_weak_dirichlet_fluxes!(fluxes, op::AbstractOperator,
-                                              result, layout, nx, dx, ctx, t_arr, nt, names)
+        result, layout, nx, dx, ctx, t_arr, nt, names)
     return
 end
-
 
 """
     print_run_banner(config, solver_config, model)
@@ -432,9 +422,9 @@ function print_run_banner(config, solver_config::SolverConfig, model::SystemMode
     println("============================================================")
 end
 
-
 function _resolve_variable_index(layout::VariableLayout, var::Integer)
-    1 <= var <= nvariables(layout) || throw(ArgumentError("Variable index $var out of range"))
+    1 <= var <= nvariables(layout) ||
+        throw(ArgumentError("Variable index $var out of range"))
     return var
 end
 
@@ -445,14 +435,14 @@ function _resolve_variable_index(layout::VariableLayout, var::Symbol)
     return idx
 end
 
-
 function library_versions()
     return Dict(
-        "julia_version"         => string(VERSION),
-        "flopsy_version"        => string(pkgversion(@__MODULE__)),
-        "scimlbase_loaded"      => isdefined(Main, :SciMLBase) || isdefined(Flopsy, :SciMLBase),
-        "ordinarydiffeq_loaded" => isdefined(Main, :OrdinaryDiffEq) || isdefined(Flopsy, :OrdinaryDiffEq),
-        "sundials_loaded"       => isdefined(Main, :Sundials) || isdefined(Flopsy, :Sundials),
+        "julia_version" => string(VERSION),
+        "flopsy_version" => string(pkgversion(@__MODULE__)),
+        "scimlbase_loaded" => isdefined(Main, :SciMLBase) || isdefined(Flopsy, :SciMLBase),
+        "ordinarydiffeq_loaded" => isdefined(Main, :OrdinaryDiffEq) ||
+                                   isdefined(Flopsy, :OrdinaryDiffEq),
+        "sundials_loaded" => isdefined(Main, :Sundials) || isdefined(Flopsy, :Sundials)
     )
 end
 
@@ -466,9 +456,9 @@ function solver_stats_dict(result::SimulationResult)
     sol = result.solution
 
     # SplitSolution and other custom solution types may not have a .stats field.
-    hasproperty(sol, :stats) && sol.stats !== nothing || return Dict{String,Any}()
+    hasproperty(sol, :stats) && sol.stats !== nothing || return Dict{String, Any}()
 
-    stats = Dict{String,Any}()
+    stats = Dict{String, Any}()
     for name in propertynames(sol.stats)
         try
             stats[string(name)] = getproperty(sol.stats, name)

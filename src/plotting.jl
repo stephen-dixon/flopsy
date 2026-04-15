@@ -17,7 +17,6 @@ function plot_tds_flux(source; kwargs...)
     _makie_error("plot_tds_flux")
 end
 
-
 """
     plot_spatial_snapshot(source; kwargs...) -> Figure
 
@@ -42,7 +41,6 @@ Requires a Makie backend.
 function plot_spatial_snapshot(source; kwargs...)
     _makie_error("plot_spatial_snapshot")
 end
-
 
 """
     plot_spatial_evolution(source; kwargs...) -> Figure
@@ -69,7 +67,6 @@ function plot_spatial_evolution(source; kwargs...)
     _makie_error("plot_spatial_evolution")
 end
 
-
 """
     record_spatial_video(source, output_path; kwargs...) -> output_path
 
@@ -90,7 +87,6 @@ Requires a Makie backend.
 function record_spatial_video(source, output_path; kwargs...)
     _makie_error("record_spatial_video")
 end
-
 
 """
     record_spatial_animation(source, output_path; kwargs...) -> output_path
@@ -123,7 +119,6 @@ record_spatial_animation(result, "spatial.mp4"; fps=24, group_fn=my_group_fn)
 function record_spatial_animation(source, output_path; kwargs...)
     _makie_error("record_spatial_animation")
 end
-
 
 # Internal helper -----------------------------------------------------------------
 

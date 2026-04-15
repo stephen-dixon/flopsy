@@ -14,7 +14,7 @@ function solve_problem(prob::SciMLBase.AbstractODEProblem, solver_config::Solver
             reltol = solver_config.reltol,
             saveat = solver_config.saveat,
             dt = solver_config.dt,
-            kwargs...,
+            kwargs...
         )
     elseif solver_config.saveat !== nothing
         return SciMLBase.solve(
@@ -23,7 +23,7 @@ function solve_problem(prob::SciMLBase.AbstractODEProblem, solver_config::Solver
             abstol = solver_config.abstol,
             reltol = solver_config.reltol,
             saveat = solver_config.saveat,
-            kwargs...,
+            kwargs...
         )
     elseif solver_config.dt !== nothing
         return SciMLBase.solve(
@@ -32,7 +32,7 @@ function solve_problem(prob::SciMLBase.AbstractODEProblem, solver_config::Solver
             abstol = solver_config.abstol,
             reltol = solver_config.reltol,
             dt = solver_config.dt,
-            kwargs...,
+            kwargs...
         )
     else
         return SciMLBase.solve(
@@ -40,7 +40,7 @@ function solve_problem(prob::SciMLBase.AbstractODEProblem, solver_config::Solver
             solver_config.algorithm;
             abstol = solver_config.abstol,
             reltol = solver_config.reltol,
-            kwargs...,
+            kwargs...
         )
     end
 end

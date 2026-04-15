@@ -47,9 +47,9 @@ const XML_FILE = get(ENV, "PALIOXIS_XML", "traps.xml")
 pal = MultipleDefectModel(XML_FILE)
 report(pal)
 
-@assert get_n_gas(pal)        == 1  "expected 1 mobile species"
-@assert get_n_trap_types(pal) == 1  "expected 1 defect/trap type"
-@assert get_n_ne_traps(pal)   == 6  "expected 6 occupancy-level DOFs"
+@assert get_n_gas(pal) == 1 "expected 1 mobile species"
+@assert get_n_trap_types(pal) == 1 "expected 1 defect/trap type"
+@assert get_n_ne_traps(pal) == 6 "expected 6 occupancy-level DOFs"
 
 println("Mobile species : ", gas_names(pal))
 println("Trap species   : ", trap_names(pal))
@@ -58,7 +58,7 @@ println("Trap species   : ", trap_names(pal))
 # 2.  Spatial mesh
 # ---------------------------------------------------------------------------
 
-const L  = 1.0e-3   # sample thickness [m]
+const L = 1.0e-3   # sample thickness [m]
 const NX = 200
 
 mesh = Mesh1D(L, NX)
@@ -74,11 +74,11 @@ defects = fill(RHO_DEFECT, get_n_trap_types(pal), NX)
 # 4.  TDS ramp: 300 K → 1200 K at 10 K/min, vacuum BCs throughout
 # ---------------------------------------------------------------------------
 
-const T_START   = 300.0
-const T_END     = 1200.0
+const T_START = 300.0
+const T_END = 1200.0
 const RAMP_RATE = 10.0 / 60.0          # K/s
-const t_ramp    = (T_END - T_START) / RAMP_RATE
-const tspan     = (0.0, t_ramp)
+const t_ramp = (T_END - T_START) / RAMP_RATE
+const tspan = (0.0, t_ramp)
 
 T_profile(t::Real)::Float64 = min(T_START + RAMP_RATE * t, T_END)
 temperature = FunctionTemperature(T_profile)
@@ -89,11 +89,11 @@ temperature = FunctionTemperature(T_profile)
 
 model = build_palioxis_trapping_model(
     palioxis_model = pal,
-    mesh           = mesh,
-    defects        = defects,
-    temperature    = temperature,
-    left_bc        = t -> 0.0,
-    right_bc       = t -> 0.0,
+    mesh = mesh,
+    defects = defects,
+    temperature = temperature,
+    left_bc = t -> 0.0,
+    right_bc = t -> 0.0
 )
 
 println("\nVariable layout:")
@@ -106,23 +106,23 @@ end
 # ---------------------------------------------------------------------------
 
 const C_TOT = 1e-10
-total_H     = fill(C_TOT, NX)
+total_H = fill(C_TOT, NX)
 
 println("\nBuilding equilibrium IC from uniform total H = $C_TOT at $(T_START) K ...")
 u0 = build_ic_from_total_hydrogen(pal, model, total_H, T_START)
 
 # Ensure boundary nodes match the vacuum BC to avoid step discontinuity.
 nvars = nvariables(model.layout)
-U0    = reshape(u0, nvars, NX)
+U0 = reshape(u0, nvars, NX)
 mobile_idx = first(variables_in_group(model.layout, :mobile))
-U0[mobile_idx, 1]  = 0.0
+U0[mobile_idx, 1] = 0.0
 U0[mobile_idx, NX] = 0.0
 
 println("IC built.")
 
 # Print initial inventories for sanity check.
 println("Initial total mobile inventory (node sum) : ",
-        sum(U0[mobile_idx, :]) * mesh.dx)
+    sum(U0[mobile_idx, :]) * mesh.dx)
 
 # ---------------------------------------------------------------------------
 # 7.  Save-points: dense during ramp
@@ -138,13 +138,13 @@ unique!(sort!(saveat))
 
 solver_config = SolverConfig(
     formulation = UnsplitFormulation(),
-    algorithm   = Rodas5(autodiff = AutoFiniteDiff()),
-    abstol      = 1e-10,
-    reltol      = 1e-8,
-    saveat      = saveat,
+    algorithm = Rodas5(autodiff = AutoFiniteDiff()),
+    abstol = 1e-10,
+    reltol = 1e-8,
+    saveat = saveat
 )
 
-print_run_banner(Dict{String,Any}(), solver_config, model)
+print_run_banner(Dict{String, Any}(), solver_config, model)
 
 # ---------------------------------------------------------------------------
 # 9.  Solve
@@ -164,24 +164,24 @@ all_names = variable_names(model.layout)
 
 result = wrap_result(
     model, sol, nothing;
-    summaries = Dict{Symbol,Any}(
+    summaries = Dict{Symbol, Any}(
         :extra_timeseries => Dict(
-            "temperature_K" => T_saved,
-        ),
+        "temperature_K" => T_saved,
     ),
-    metadata = Dict{String,Any}(
-        "model_type"        => "tds_from_equilibrium",
-        "xml_file"          => XML_FILE,
-        "L_m"               => L,
-        "nx"                => NX,
-        "rho_defect"        => RHO_DEFECT,
-        "C_tot_IC"          => C_TOT,
-        "T_start_K"         => T_START,
-        "T_end_K"           => T_END,
+    ),
+    metadata = Dict{String, Any}(
+        "model_type" => "tds_from_equilibrium",
+        "xml_file" => XML_FILE,
+        "L_m" => L,
+        "nx" => NX,
+        "rho_defect" => RHO_DEFECT,
+        "C_tot_IC" => C_TOT,
+        "T_start_K" => T_START,
+        "T_end_K" => T_END,
         "ramp_rate_K_per_s" => RAMP_RATE,
-        "retcode"           => string(sol.retcode),
-        "walltime_s"        => t_wall,
-    ),
+        "retcode" => string(sol.retcode),
+        "walltime_s" => t_wall
+    )
 )
 
 write_summary_csv(result, "out_eq/tds_eq_summary.csv")
@@ -192,7 +192,7 @@ println("Written: out_eq/tds_eq_summary.csv, out_eq/tds_eq_fields.h5")
 # 11.  Peak desorption temperature
 # ---------------------------------------------------------------------------
 
-fluxes     = surface_diffusive_fluxes(result)
+fluxes = surface_diffusive_fluxes(result)
 mobile_sym = variable_names(model.layout)[mobile_idx]
 right_flux = fluxes[mobile_sym].right
 
@@ -206,23 +206,28 @@ println("  T    = $(T_saved[i_peak]) K")
 # ---------------------------------------------------------------------------
 
 # Group mobile and sum all trap occupancy levels into "Total trapped".
-group_fn = (names, data) -> begin
-    out = Dict{String,Vector{Float64}}()
-    mob_i  = [i for (i,n) in enumerate(names) if startswith(String(n), "mobile")]
-    trap_i = [i for (i,n) in enumerate(names) if startswith(String(n), "trap")]
+group_fn = (names,
+    data) -> begin
+    out = Dict{String, Vector{Float64}}()
+    mob_i = [i for (i, n) in enumerate(names) if startswith(String(n), "mobile")]
+    trap_i = [i for (i, n) in enumerate(names) if startswith(String(n), "trap")]
     for i in mob_i
         out[String(names[i])] = vec(copy(data[i, :]))
     end
     if !isempty(trap_i)
         tot = zeros(size(data, 2))
-        for i in trap_i; tot .+= data[i, :]; end
+        for i in trap_i
+            ;
+            tot .+= data[i, :];
+        end
         out["Total trapped"] = tot
     end
     out
 end
 
 # All individual variables (for the animation — 1 mobile + 6 trap levels = 7 lines).
-group_all = (names, data) -> Dict(String(n) => vec(copy(data[i,:])) for (i,n) in enumerate(names))
+group_all = (
+    names, data) -> Dict(String(n) => vec(copy(data[i, :])) for (i, n) in enumerate(names))
 
 # ---------------------------------------------------------------------------
 # 13.  Spatial plots
@@ -231,33 +236,33 @@ group_all = (names, data) -> Dict(String(n) => vec(copy(data[i,:])) for (i,n) in
 # TDS flux vs temperature.
 fig_flux = plot_tds_flux(result;
     surface = :right,
-    title   = "TDS desorption spectrum (from equilibrium IC)",
+    title = "TDS desorption spectrum (from equilibrium IC)"
 )
 save("out_eq/fig_tds_flux.png", fig_flux)
 
 # Initial spatial profile (all 7 fields on one log-log axis).
 fig_init = plot_spatial_snapshot(result;
     time_index = 1,
-    group_fn   = group_all,
+    group_fn = group_all,
     all_on_one = true,
-    xscale     = :log10,
-    yscale     = :log10,
-    xmin       = 1e-20,
-    ymin       = 1e-20,
-    title      = @sprintf("Initial spatial profile  (T = %.0f K)", T_START),
+    xscale = :log10,
+    yscale = :log10,
+    xmin = 1e-20,
+    ymin = 1e-20,
+    title = @sprintf("Initial spatial profile  (T = %.0f K)", T_START)
 )
 save("out_eq/fig_spatial_initial.png", fig_init)
 
 # Final spatial profile.
 fig_final = plot_spatial_snapshot(result;
     time_index = :last,
-    group_fn   = group_all,
+    group_fn = group_all,
     all_on_one = true,
-    xscale     = :log10,
-    yscale     = :log10,
-    xmin       = 1e-20,
-    ymin       = 1e-20,
-    title      = @sprintf("Final spatial profile  (T = %.0f K)", T_saved[end]),
+    xscale = :log10,
+    yscale = :log10,
+    xmin = 1e-20,
+    ymin = 1e-20,
+    title = @sprintf("Final spatial profile  (T = %.0f K)", T_saved[end])
 )
 save("out_eq/fig_spatial_final.png", fig_final)
 
@@ -272,16 +277,16 @@ anim_path = record_spatial_animation(
     result,
     "out_eq/spatial_animation.mp4";
     group_fn = group_all,
-    fps      = 20,
-    xscale   = :log10,
-    yscale   = :log10,
-    xmin     = 1e-20,
-    ymin     = 1e-20,
+    fps = 20,
+    xscale = :log10,
+    yscale = :log10,
+    xmin = 1e-20,
+    ymin = 1e-20,
     colormap = :tab10,
     title_fn = t -> begin
         T_t = T_profile(t)
         @sprintf("t = %.0f s   T = %.1f K", t, T_t)
-    end,
+    end
 )
 println("Written: $anim_path")
 

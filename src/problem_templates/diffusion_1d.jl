@@ -21,7 +21,7 @@ function instantiate(::Diffusion1DTemplate, cfg::ProblemConfig)
         mesh = mesh,
         reaction = reaction,
         diffusion = diffusion,
-        boundary = boundary,
+        boundary = boundary
     )
 
     u0 = zeros(Float64, nvariables(layout) * mesh_nx(mesh))

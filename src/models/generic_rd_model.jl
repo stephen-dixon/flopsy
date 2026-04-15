@@ -9,20 +9,20 @@ is intended for a `DirichletBoundaryOperator`; the constraints slot for a
 `ConstraintOperator` (DAE path).
 """
 function build_rd_model(;
-    layout::VariableLayout,
-    mesh::Mesh1D,
-    reaction::Union{AbstractOperator,Nothing}=nothing,
-    diffusion::Union{AbstractOperator,Nothing}=nothing,
-    boundary::Union{AbstractOperator,Nothing}=nothing,
-    constraints::Union{AbstractOperator,Nothing}=nothing,
-    aux=NamedTuple(),
-    scratch=nothing,
+        layout::VariableLayout,
+        mesh::Mesh1D,
+        reaction::Union{AbstractOperator, Nothing} = nothing,
+        diffusion::Union{AbstractOperator, Nothing} = nothing,
+        boundary::Union{AbstractOperator, Nothing} = nothing,
+        constraints::Union{AbstractOperator, Nothing} = nothing,
+        aux = NamedTuple(),
+        scratch = nothing
 )
     nx = length(mesh.x)
     nstate = nvariables(layout) * nx
     default_scratch = (
         rhs_tmp = zeros(Float64, nstate),
-        implicit_rhs_tmp = zeros(Float64, nstate),
+        implicit_rhs_tmp = zeros(Float64, nstate)
     )
     scratch_data = if scratch === nothing
         default_scratch
@@ -37,14 +37,14 @@ function build_rd_model(;
         nx,
         mesh,
         aux isa AbstractDict ? copy(aux) : aux,
-        scratch_data,
+        scratch_data
     )
 
     operators = (
-        reaction    = reaction,
-        diffusion   = diffusion,
-        boundary    = boundary,
-        constraints = constraints,
+        reaction = reaction,
+        diffusion = diffusion,
+        boundary = boundary,
+        constraints = constraints
     )
 
     return SystemModel(layout, operators, ctx)

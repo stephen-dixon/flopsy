@@ -9,7 +9,7 @@
             "k_detrap" => 0.25,
             "diffusion_coefficient" => 0.05,
             "saveat" => [0.0, 0.5, 2.0],
-            "algorithm" => "Rodas5",
+            "algorithm" => "Rodas5"
         )
 
         cfg = parse_config(raw)
@@ -28,7 +28,7 @@
             MeshConfig(:uniform_1d, 11, 0.0, 1.0),
             InputSolverConfig(:split, :Rodas5, nothing, 1e-8, 1e-6, [0.0, 1.0]),
             BoundaryConditionConfig{Float64}[],
-            (; t0 = 0.0, tend = 1.0, diffusion_coefficient = 0.1),
+            (; t0 = 0.0, tend = 1.0, diffusion_coefficient = 0.1)
         )
 
         @test_throws ArgumentError validate(cfg)
@@ -41,8 +41,8 @@
             InputSolverConfig(:unsplit, :Rodas5, nothing, 1e-8, 1e-6, [0.0, 0.1]),
             BoundaryConditionConfig{Float64}[],
             (; t0 = 0.0, tend = 0.1, k_trap = 2.0, k_detrap = 0.25,
-               diffusion_coefficient = 0.05, initial_mobile_pulse_amplitude = 1.0,
-               initial_trap_occupancy = 0.0),
+                diffusion_coefficient = 0.05, initial_mobile_pulse_amplitude = 1.0,
+                initial_trap_occupancy = 0.0)
         )
 
         problem = build_problem(cfg)

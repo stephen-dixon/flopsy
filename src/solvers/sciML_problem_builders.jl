@@ -4,7 +4,8 @@
 Assemble a SciML problem (e.g. `ODEProblem`) from the model, initial state,
 time span, and formulation.  Dispatches on the formulation type.
 """
-function build_problem(model::SystemModel, u0, tspan, ::UnsplitFormulation, solver_config::SolverConfig)
+function build_problem(
+        model::SystemModel, u0, tspan, ::UnsplitFormulation, solver_config::SolverConfig)
     return build_unsplit_problem(model, u0, tspan, solver_config)
 end
 
@@ -36,7 +37,7 @@ function build_unsplit_problem(model::SystemModel, u0, tspan, solver_config::Sol
 
         if M !== nothing
             ode_f = ODEFunction(f!, jac = jac!, jac_prototype = prototype,
-                                mass_matrix = M)
+                mass_matrix = M)
         else
             ode_f = ODEFunction(f!, jac = jac!, jac_prototype = prototype)
         end
@@ -50,7 +51,6 @@ function build_unsplit_problem(model::SystemModel, u0, tspan, solver_config::Sol
 
     return ODEProblem(ode_f, u0, tspan)
 end
-
 
 # ---------------------------------------------------------------------------
 # Mass matrix collection
@@ -67,9 +67,9 @@ function _collect_mass_matrix(ops, ctx::SystemContext)
     any(supports_mass_matrix, ops) || return nothing
 
     layout = ctx.layout
-    nx     = ctx.nx
-    nvars  = nvariables(layout)
-    n      = nvars * nx
+    nx = ctx.nx
+    nvars = nvariables(layout)
+    n = nvars * nx
 
     m = ones(Float64, n)
     for op in ops
@@ -84,24 +84,23 @@ function _collect_mass_matrix(ops, ctx::SystemContext)
     return Diagonal(m)
 end
 
-
 # ---------------------------------------------------------------------------
 # Sparse Jacobian prototype
 # ---------------------------------------------------------------------------
 
 function _build_jac_prototype(model::SystemModel, ops)
     layout = model.context.layout
-    nx     = model.context.nx
-    nvars  = nvariables(layout)
-    n      = nvars * nx
+    nx = model.context.nx
+    nvars = nvariables(layout)
+    n = nvars * nx
 
-    entries = Set{Tuple{Int,Int}}()
+    entries = Set{Tuple{Int, Int}}()
 
     # --- Per-node diagonal block ---
     # Collect per-node sparsity from each operator (union).
     # Fall back to fully dense if any operator returns nothing.
-    node_pattern = Set{Tuple{Int,Int}}()
-    dense_diag   = false
+    node_pattern = Set{Tuple{Int, Int}}()
+    dense_diag = false
     for op in ops
         sp = jacobian_node_sparsity(op, layout)
         if sp === nothing
@@ -115,6 +114,7 @@ function _build_jac_prototype(model::SystemModel, ops)
         for ix in 1:nx
             offset = (ix - 1) * nvars
             for iv1 in 1:nvars, iv2 in 1:nvars
+
                 push!(entries, (offset + iv1, offset + iv2))
             end
         end
@@ -132,7 +132,7 @@ function _build_jac_prototype(model::SystemModel, ops)
         for ivar in diffusion_variable_indices(op, layout)
             for ix in 1:(nx - 1)
                 r = (ix - 1) * nvars + ivar
-                c = ix       * nvars + ivar
+                c = ix * nvars + ivar
                 push!(entries, (r, c))
                 push!(entries, (c, r))
             end

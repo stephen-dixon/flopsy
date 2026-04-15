@@ -21,34 +21,34 @@ using LinearAlgebra: norm
 # Problem setup
 # ---------------------------------------------------------------------------
 
-mesh    = Mesh1D(1e-3, 40)          # 1 mm domain, 40 nodes
-nx      = length(mesh.x)
-t_end   = 200.0
-tspan   = (0.0, t_end)
-n_save  = 101
-saveat  = range(0.0, t_end; length = n_save)
+mesh = Mesh1D(1e-3, 40)          # 1 mm domain, 40 nodes
+nx = length(mesh.x)
+t_end = 200.0
+tspan = (0.0, t_end)
+n_save = 101
+saveat = range(0.0, t_end; length = n_save)
 
-k_trap   = 5e-3
+k_trap = 5e-3
 k_detrap = 0.05
 D_mobile = 1e-7                     # m²/s
 
 model = build_trapping_model(
-    mesh                 = mesh,
-    k_trap               = k_trap,
-    k_detrap             = k_detrap,
-    diffusion_coefficient = D_mobile,
+    mesh = mesh,
+    k_trap = k_trap,
+    k_detrap = k_detrap,
+    diffusion_coefficient = D_mobile
 )
 
 # Gaussian initial mobile profile; traps empty
-x   = mesh.x
-c0  = 0.05 .* exp.(-(x .- x[end]/2).^2 ./ (2*(x[end]/8)^2))
+x = mesh.x
+c0 = 0.05 .* exp.(-(x .- x[end]/2) .^ 2 ./ (2*(x[end]/8)^2))
 th0 = zeros(nx)
 
 # Pack into the flat state vector (nvars=2, column-major: [c, theta] per node)
 u0 = zeros(2 * nx)
 for ix in 1:nx
-    u0[(ix-1)*2 + 1] = c0[ix]
-    u0[(ix-1)*2 + 2] = th0[ix]
+    u0[(ix - 1) * 2 + 1] = c0[ix]
+    u0[(ix - 1) * 2 + 2] = th0[ix]
 end
 
 println("Model: nx=$(nx)  t_end=$(t_end)  k_trap=$(k_trap)  k_detrap=$(k_detrap)  D=$(D_mobile)")
@@ -59,8 +59,8 @@ println()
 # ---------------------------------------------------------------------------
 
 function extract_profiles(result)
-    c   = variable_timeseries(result, :c)
-    th  = variable_timeseries(result, :theta)
+    c = variable_timeseries(result, :c)
+    th = variable_timeseries(result, :theta)
     return c, th
 end
 
@@ -71,12 +71,12 @@ end
 println("=== 1. UnsplitFormulation ===")
 config_unsplit = SolverConfig(
     formulation = UnsplitFormulation(),
-    algorithm   = Rodas5P(),
-    abstol      = 1e-9,
-    reltol      = 1e-7,
-    saveat      = collect(saveat),
-    show_progress      = false,
-    show_solver_stats  = false,
+    algorithm = Rodas5P(),
+    abstol = 1e-9,
+    reltol = 1e-7,
+    saveat = collect(saveat),
+    show_progress = false,
+    show_solver_stats = false
 )
 
 t_unsplit = @elapsed begin
@@ -95,12 +95,12 @@ println()
 println("=== 2. IMEXFormulation (KenCarp4) ===")
 config_imex = SolverConfig(
     formulation = IMEXFormulation(),
-    algorithm   = KenCarp4(),
-    abstol      = 1e-9,
-    reltol      = 1e-7,
-    saveat      = collect(saveat),
-    show_progress      = false,
-    show_solver_stats  = false,
+    algorithm = KenCarp4(),
+    abstol = 1e-9,
+    reltol = 1e-7,
+    saveat = collect(saveat),
+    show_progress = false,
+    show_solver_stats = false
 )
 
 t_imex = @elapsed begin
@@ -122,13 +122,13 @@ println("=== 3. SplitFormulation(LieSplit) ===")
 # pre-allocated Float64 scratch buffers — use AutoFiniteDiff instead.
 config_lie = SolverConfig(
     formulation = SplitFormulation(LieSplit()),
-    algorithm   = Rodas5(autodiff=AutoFiniteDiff()),
-    abstol      = 1e-9,
-    reltol      = 1e-7,
-    saveat      = collect(saveat),
-    dt          = 2.0,             # macro-step size (seconds)
-    show_progress      = false,
-    show_solver_stats  = false,
+    algorithm = Rodas5(autodiff = AutoFiniteDiff()),
+    abstol = 1e-9,
+    reltol = 1e-7,
+    saveat = collect(saveat),
+    dt = 2.0,             # macro-step size (seconds)
+    show_progress = false,
+    show_solver_stats = false
 )
 
 t_lie = @elapsed begin
@@ -158,13 +158,13 @@ println()
 println("=== 4. SplitFormulation(StrangSplit) ===")
 config_strang = SolverConfig(
     formulation = SplitFormulation(StrangSplit()),
-    algorithm   = Rodas5(autodiff=AutoFiniteDiff()),
-    abstol      = 1e-9,
-    reltol      = 1e-7,
-    saveat      = collect(saveat),
-    dt          = 2.0,
-    show_progress      = false,
-    show_solver_stats  = false,
+    algorithm = Rodas5(autodiff = AutoFiniteDiff()),
+    abstol = 1e-9,
+    reltol = 1e-7,
+    saveat = collect(saveat),
+    dt = 2.0,
+    show_progress = false,
+    show_solver_stats = false
 )
 
 t_strang = @elapsed begin
@@ -182,12 +182,12 @@ println()
 println("=== 5. ResidualFormulation (Rodas5P, mass-matrix DAE) ===")
 config_dae = SolverConfig(
     formulation = ResidualFormulation(),
-    algorithm   = Rodas5P(),
-    abstol      = 1e-9,
-    reltol      = 1e-7,
-    saveat      = collect(saveat),
-    show_progress      = false,
-    show_solver_stats  = false,
+    algorithm = Rodas5P(),
+    abstol = 1e-9,
+    reltol = 1e-7,
+    saveat = collect(saveat),
+    show_progress = false,
+    show_solver_stats = false
 )
 
 t_dae = @elapsed begin

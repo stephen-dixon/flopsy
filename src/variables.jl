@@ -25,7 +25,7 @@ Query with `nvariables`, `variable_names`, `variables_in_group`, `variables_with
 """
 struct VariableLayout
     variables::Vector{VariableInfo}
-    group_ranges::Dict{Symbol,UnitRange{Int}}
+    group_ranges::Dict{Symbol, UnitRange{Int}}
 end
 
 """
@@ -74,7 +74,7 @@ function variables_with_tag(layout::VariableLayout, tag::Symbol)
 end
 
 function VariableLayout(variables::Vector{VariableInfo})
-    group_ranges = Dict{Symbol,UnitRange{Int}}()
+    group_ranges = Dict{Symbol, UnitRange{Int}}()
 
     if isempty(variables)
         return VariableLayout(variables, group_ranges)

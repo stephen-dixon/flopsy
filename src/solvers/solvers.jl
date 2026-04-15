@@ -20,16 +20,16 @@ function solve_problem(model::SystemModel, u0, tspan, solver_config::SolverConfi
         cb = CallbackSet(callbacks...)
         kw = merge(solver_config.kwargs, (; callback = cb))
         tmp_config = SolverConfig(
-            formulation          = solver_config.formulation,
-            algorithm            = solver_config.algorithm,
-            abstol               = solver_config.abstol,
-            reltol               = solver_config.reltol,
-            saveat               = solver_config.saveat,
-            dt                   = solver_config.dt,
-            show_progress        = solver_config.show_progress,
-            show_solver_stats    = solver_config.show_solver_stats,
+            formulation = solver_config.formulation,
+            algorithm = solver_config.algorithm,
+            abstol = solver_config.abstol,
+            reltol = solver_config.reltol,
+            saveat = solver_config.saveat,
+            dt = solver_config.dt,
+            show_progress = solver_config.show_progress,
+            show_solver_stats = solver_config.show_solver_stats,
             write_convergence_trace = solver_config.write_convergence_trace,
-            kwargs               = kw,
+            kwargs = kw
         )
         return solve_problem(prob, tmp_config)
     end

@@ -17,7 +17,7 @@ Fields:
                       levels in different groups are not coupled.
                       Default (6-arg constructor): each trap in its own singleton group.
 """
-struct HotgatesTrappingAdaptor{I,N}
+struct HotgatesTrappingAdaptor{I, N}
     mobile_indices::Vector{I}
     trap_indices::Vector{I}
     mobile_names::Vector{N}
@@ -36,18 +36,17 @@ Jacobian block).  Override by supplying the 7-argument form when defect types ha
 multiple fill levels that are coupled (e.g. Palioxis multi-occupancy trapping).
 """
 function HotgatesTrappingAdaptor(mobile_indices, trap_indices, mobile_names,
-                                   trap_names, defect_names, defects)
+        trap_names, defect_names, defects)
     nt = length(trap_indices)
     trap_groups = [[i] for i in 1:nt]
     return HotgatesTrappingAdaptor(mobile_indices, trap_indices, mobile_names,
-                                    trap_names, defect_names, defects, trap_groups)
+        trap_names, defect_names, defects, trap_groups)
 end
-
 
 """
 Reaction operator wrapping a Hotgates-like backend model plus an adaptor.
 """
-struct HotgatesReactionOperator{M,A,T} <: AbstractReactionOperator
+struct HotgatesReactionOperator{M, A, T} <: AbstractReactionOperator
     model::M
     adaptor::A
     temperature::T
@@ -75,7 +74,7 @@ function HotgatesWorkspace(nmobile::Int, ntrapped::Int, nvars::Int)
         zeros(Float64, ntrapped),
         zeros(Float64, nmobile),
         zeros(Float64, ntrapped),
-        zeros(Float64, nvars, nvars),
+        zeros(Float64, nvars, nvars)
     )
 end
 
@@ -101,20 +100,23 @@ for backends with independent trap species.
 """
 function jacobian_node_sparsity(op::HotgatesReactionOperator, layout)
     adaptor = op.adaptor
-    m_idxs  = adaptor.mobile_indices
-    t_idxs  = adaptor.trap_indices
-    entries = Set{Tuple{Int,Int}}()
+    m_idxs = adaptor.mobile_indices
+    t_idxs = adaptor.trap_indices
+    entries = Set{Tuple{Int, Int}}()
 
     # Mobile-mobile block (dense)
     for cm in m_idxs, rm in m_idxs
+
         push!(entries, (rm, cm))
     end
 
     # Mobile←trap and trap←mobile blocks (dense)
     for ct in t_idxs, rm in m_idxs
+
         push!(entries, (rm, ct))
     end
     for cm in m_idxs, rt in t_idxs
+
         push!(entries, (rt, cm))
     end
 
@@ -124,7 +126,7 @@ function jacobian_node_sparsity(op::HotgatesReactionOperator, layout)
         for k in eachindex(gvars)
             push!(entries, (gvars[k], gvars[k]))            # diagonal
             if k > 1
-                push!(entries, (gvars[k],   gvars[k - 1])) # sub-diagonal
+                push!(entries, (gvars[k], gvars[k - 1])) # sub-diagonal
                 push!(entries, (gvars[k - 1], gvars[k]))   # super-diagonal
             end
         end
@@ -132,7 +134,6 @@ function jacobian_node_sparsity(op::HotgatesReactionOperator, layout)
 
     return entries
 end
-
 
 """
 Construct a Flopsy VariableLayout from adaptor metadata.
@@ -154,7 +155,6 @@ function build_hotgates_variable_layout(adaptor::HotgatesTrappingAdaptor)
     return VariableLayout(vars)
 end
 
-
 """
 Build a generic reaction-diffusion model using a Hotgates-like reaction backend.
 
@@ -162,12 +162,12 @@ Build a generic reaction-diffusion model using a Hotgates-like reaction backend.
 non-diffusing variables (typically all trap species).
 """
 function build_hotgates_trapping_model(;
-    mesh::Mesh1D,
-    model,
-    adaptor::HotgatesTrappingAdaptor,
-    temperature::AbstractTemperatureProvider,
-    diffusion_coefficients::AbstractVector,
-    boundary = nothing,
+        mesh::Mesh1D,
+        model,
+        adaptor::HotgatesTrappingAdaptor,
+        temperature::AbstractTemperatureProvider,
+        diffusion_coefficients::AbstractVector,
+        boundary = nothing
 )
     layout = build_hotgates_variable_layout(adaptor)
 
@@ -179,7 +179,8 @@ function build_hotgates_trapping_model(;
     selector(layout::VariableLayout) = variables_with_tag(layout, :diffusion)
     diffusion = LinearDiffusionOperator(collect(diffusion_coefficients), selector, nothing)
     scratch = (
-        hotgates = HotgatesWorkspace(length(adaptor.mobile_indices), length(adaptor.trap_indices), nvariables(layout)),
+        hotgates = HotgatesWorkspace(
+        length(adaptor.mobile_indices), length(adaptor.trap_indices), nvariables(layout)),
     )
 
     return build_rd_model(
@@ -188,10 +189,9 @@ function build_hotgates_trapping_model(;
         reaction = reaction,
         diffusion = diffusion,
         boundary = boundary,
-        scratch = scratch,
+        scratch = scratch
     )
 end
-
 
 """
     hotgates_jacobian!(J_local, model, adaptor, mobile, defects, trapped, T)
@@ -203,17 +203,18 @@ by perturbing each input.  The Palioxis extension overrides this for
 `Palioxis.MultipleDefectModel` using the analytic `time_derivatives_jacobian`.
 """
 function hotgates_jacobian!(J_local, model, adaptor::HotgatesTrappingAdaptor,
-                             mobile, defects, trapped, T, workspace::HotgatesWorkspace)
+        mobile, defects, trapped, T, workspace::HotgatesWorkspace)
     # Default: finite-difference fallback using hotgates_rates!
-    nm   = length(adaptor.mobile_indices)
-    nt   = length(adaptor.trap_indices)
+    nm = length(adaptor.mobile_indices)
+    nt = length(adaptor.trap_indices)
     fill!(J_local, 0.0)
     fill!(workspace.mobile_fd, 0.0)
     fill!(workspace.trapped_fd, 0.0)
     fill!(workspace.dmobile_fd, 0.0)
     fill!(workspace.dtrapped_fd, 0.0)
 
-    hotgates_rates!(workspace.dmobile_fd, workspace.dtrapped_fd, model, mobile, defects, trapped, T)
+    hotgates_rates!(
+        workspace.dmobile_fd, workspace.dtrapped_fd, model, mobile, defects, trapped, T)
 
     eps = 1e-7
     copyto!(workspace.mobile_fd, mobile)
@@ -224,12 +225,15 @@ function hotgates_jacobian!(J_local, model, adaptor::HotgatesTrappingAdaptor,
         workspace.mobile_fd[j] += h
         fill!(workspace.dmobile, 0.0)
         fill!(workspace.dtrapped, 0.0)
-        hotgates_rates!(workspace.dmobile, workspace.dtrapped, model, workspace.mobile_fd, defects, workspace.trapped_fd, T)
+        hotgates_rates!(workspace.dmobile, workspace.dtrapped, model,
+            workspace.mobile_fd, defects, workspace.trapped_fd, T)
         for i in eachindex(adaptor.mobile_indices)
-            J_local[adaptor.mobile_indices[i], idx] += (workspace.dmobile[i] - workspace.dmobile_fd[i]) / h
+            J_local[adaptor.mobile_indices[i], idx] += (workspace.dmobile[i] -
+                                                        workspace.dmobile_fd[i]) / h
         end
         for i in eachindex(adaptor.trap_indices)
-            J_local[adaptor.trap_indices[i], idx] += (workspace.dtrapped[i] - workspace.dtrapped_fd[i]) / h
+            J_local[adaptor.trap_indices[i], idx] += (workspace.dtrapped[i] -
+                                                      workspace.dtrapped_fd[i]) / h
         end
         workspace.mobile_fd[j] -= h
     end
@@ -239,19 +243,21 @@ function hotgates_jacobian!(J_local, model, adaptor::HotgatesTrappingAdaptor,
         workspace.trapped_fd[j] += h
         fill!(workspace.dmobile, 0.0)
         fill!(workspace.dtrapped, 0.0)
-        hotgates_rates!(workspace.dmobile, workspace.dtrapped, model, workspace.mobile_fd, defects, workspace.trapped_fd, T)
+        hotgates_rates!(workspace.dmobile, workspace.dtrapped, model,
+            workspace.mobile_fd, defects, workspace.trapped_fd, T)
         for i in eachindex(adaptor.mobile_indices)
-            J_local[adaptor.mobile_indices[i], idx] += (workspace.dmobile[i] - workspace.dmobile_fd[i]) / h
+            J_local[adaptor.mobile_indices[i], idx] += (workspace.dmobile[i] -
+                                                        workspace.dmobile_fd[i]) / h
         end
         for i in eachindex(adaptor.trap_indices)
-            J_local[adaptor.trap_indices[i], idx] += (workspace.dtrapped[i] - workspace.dtrapped_fd[i]) / h
+            J_local[adaptor.trap_indices[i], idx] += (workspace.dtrapped[i] -
+                                                      workspace.dtrapped_fd[i]) / h
         end
         workspace.trapped_fd[j] -= h
     end
 
     return J_local
 end
-
 
 """
 Main Flopsy RHS bridge for Hotgates-like backends.
@@ -273,7 +279,6 @@ function rhs!(du, op::HotgatesReactionOperator, u, ctx::SystemContext, t)
     return du
 end
 
-
 """
 Default local bridge for trapping-style Hotgates adaptors.
 
@@ -281,7 +286,8 @@ Extracts mobile and trapped concentrations from the node state, calls
 `hotgates_rates!` on the backend model, and accumulates the result back into
 the node residual.  Defect concentrations are taken from `adaptor.defects[:, ix]`.
 """
-function local_rhs!(du_local, u_local, model, adaptor::HotgatesTrappingAdaptor, ctx, t, ix, T)
+function local_rhs!(
+        du_local, u_local, model, adaptor::HotgatesTrappingAdaptor, ctx, t, ix, T)
     nd = size(adaptor.defects, 1)
     workspace = _hotgates_workspace(ctx.scratch, adaptor, length(u_local))
     mobile = workspace.mobile
@@ -314,7 +320,6 @@ function local_rhs!(du_local, u_local, model, adaptor::HotgatesTrappingAdaptor, 
     return du_local
 end
 
-
 """
 Analytic Jacobian bridge for Hotgates-like backends.
 
@@ -324,8 +329,8 @@ for the operator (requires the backend to support analytic Jacobians, e.g. Palio
 """
 function jacobian!(J, op::HotgatesReactionOperator, u, ctx::SystemContext, t)
     layout = ctx.layout
-    nx     = ctx.nx
-    nvars  = nvariables(layout)
+    nx = ctx.nx
+    nvars = nvariables(layout)
 
     U = state_view(u, layout, nx)
 
@@ -346,9 +351,11 @@ function jacobian!(J, op::HotgatesReactionOperator, u, ctx::SystemContext, t)
             trapped[j] = u_local[idx]
         end
         J_local = workspace.J_local
-        hotgates_jacobian!(J_local, op.model, op.adaptor, mobile, defects, trapped, T, workspace)
+        hotgates_jacobian!(
+            J_local, op.model, op.adaptor, mobile, defects, trapped, T, workspace)
 
         for c in 1:nvars, r in 1:nvars
+
             J[offset + r, offset + c] += J_local[r, c]
         end
     end
@@ -368,7 +375,6 @@ function _hotgates_workspace(scratch::NamedTuple, adaptor::HotgatesTrappingAdapt
     end
     return HotgatesWorkspace(length(adaptor.mobile_indices), length(adaptor.trap_indices), nvars)
 end
-
 
 # ------------------------------------------------------------------
 # Stub for the real Palioxis backend — implemented in ext/PalioxisExt.jl
@@ -398,7 +404,6 @@ extra implementation cost.
 """
 function build_palioxis_trapping_model end
 
-
 """
     build_equilibrium_ic(palioxis_model, model, mobile_profile, T) -> Vector{Float64}
 
@@ -411,7 +416,6 @@ trapped species at their Palioxis equilibrium values for temperature `T`.
 Requires the `Palioxis` package extension.
 """
 function build_equilibrium_ic end
-
 
 """
     build_ic_from_total_hydrogen(palioxis_model, model, total_hydrogen, T) -> Vector{Float64}
@@ -433,7 +437,6 @@ Requires the `Palioxis` package extension.
 """
 function build_ic_from_total_hydrogen end
 
-
 # ------------------------------------------------------------------
 # Fake backend for testing the adaptor path before wiring real Palioxis
 # ------------------------------------------------------------------
@@ -451,7 +454,6 @@ struct FakeHotgatesModel{T}
     k_detrap::T
 end
 
-
 """
     hotgates_rates!(dmobile, dtrapped, model, mobile, defects, trapped, T)
 
@@ -461,19 +463,20 @@ In-place reaction rates API used by `local_rhs!`.
 `defects` is the defect concentration vector for the current node (may be
 length-0 for backends that do not use it).
 """
-function hotgates_rates!(dmobile, dtrapped, model::FakeHotgatesModel, mobile, defects, trapped, T)
-    fill!(dmobile,  zero(eltype(dmobile)))
+function hotgates_rates!(
+        dmobile, dtrapped, model::FakeHotgatesModel, mobile, defects, trapped, T)
+    fill!(dmobile, zero(eltype(dmobile)))
     fill!(dtrapped, zero(eltype(dtrapped)))
 
     length(mobile) == length(trapped) ||
         throw(ArgumentError("FakeHotgatesModel expects equal numbers of mobile and trap variables"))
 
     @inbounds for j in eachindex(mobile, trapped, dmobile, dtrapped)
-        trap_flux   = model.k_trap   * mobile[j] * (1 - trapped[j])
+        trap_flux = model.k_trap * mobile[j] * (1 - trapped[j])
         detrap_flux = model.k_detrap * trapped[j]
         net = trap_flux - detrap_flux
 
-        dmobile[j]  -= net
+        dmobile[j] -= net
         dtrapped[j] += net
     end
 
