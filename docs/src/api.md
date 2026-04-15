@@ -36,6 +36,22 @@ Mesh1D
 ```@docs
 SystemContext
 SystemModel
+SimulationProblem
+```
+
+## Config layer
+
+```@docs
+MeshConfig
+BoundaryConditionConfig
+InputSolverConfig
+ProblemConfig
+load_config
+parse_config
+validate
+build_problem(::ProblemConfig)
+solve(::SimulationProblem)
+run_simulation
 ```
 
 ## State vector helpers
@@ -118,13 +134,17 @@ build_trapping_model
 trapping_variable_layout
 ```
 
-## Solver
+## Solver core
 
 ```@docs
 SolverConfig
 SplitProblem
 SplitSolution
-build_problem
+build_problem(::SystemModel, Any, Any, ::UnsplitFormulation, ::SolverConfig)
+build_problem(::SystemModel, Any, Any, ::IMEXFormulation, ::SolverConfig)
+build_problem(::SystemModel, Any, Any, ::IMEXReactionFormulation, ::SolverConfig)
+build_problem(::SystemModel, Any, Any, ::SplitFormulation, ::SolverConfig)
+build_problem(::SystemModel, Any, Any, ::ResidualFormulation, ::SolverConfig)
 solve_problem
 ```
 
@@ -140,13 +160,6 @@ build_equilibrium_ic
 build_ic_from_total_hydrogen
 FakeHotgatesModel
 hotgates_rates!
-```
-
-## Runner
-
-```@docs
-load_config
-run_simulation
 ```
 
 ## Plotting

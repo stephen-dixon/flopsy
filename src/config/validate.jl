@@ -1,3 +1,9 @@
+"""
+    validate(cfg::ProblemConfig) -> ProblemConfig
+
+Validate a parsed configuration and throw user-facing errors before solver
+construction.
+"""
 function validate(cfg::ProblemConfig)
     cfg.mesh.kind == :uniform_1d || throw(ArgumentError("Only mesh.kind = \"uniform_1d\" is currently supported"))
     cfg.mesh.nx >= 2 || throw(ArgumentError("mesh.nx must be at least 2"))

@@ -6,7 +6,7 @@ loaded before calling them.
 
 ## Setup
 
-Install and load any Makie backend:
+Install and load a Makie backend:
 
 ```julia
 # Static file output (PNG, SVG, PDF, MP4) — recommended for scripts

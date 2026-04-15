@@ -1,3 +1,8 @@
+"""
+    MeshConfig
+
+Typed mesh specification for the config-driven problem layer.
+"""
 struct MeshConfig{T}
     kind::Symbol
     nx::Int
@@ -5,6 +10,11 @@ struct MeshConfig{T}
     xmax::T
 end
 
+"""
+    BoundaryConditionConfig
+
+Typed boundary-condition specification used by the config layer.
+"""
 struct BoundaryConditionConfig{T}
     variable::Symbol
     side::Symbol
@@ -13,6 +23,12 @@ struct BoundaryConditionConfig{T}
     method::Symbol
 end
 
+"""
+    InputSolverConfig
+
+Typed solver settings parsed from TOML before they are lowered into the core
+`SolverConfig`.
+"""
 struct InputSolverConfig{A,T,S}
     formulation::Symbol
     algorithm::A
@@ -22,6 +38,11 @@ struct InputSolverConfig{A,T,S}
     saveat::S
 end
 
+"""
+    ProblemConfig
+
+Typed top-level problem configuration used by the factory-built problem layer.
+"""
 struct ProblemConfig{M,S,BC,P}
     problem_type::Symbol
     mesh::M

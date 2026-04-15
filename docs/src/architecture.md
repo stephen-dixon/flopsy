@@ -292,9 +292,12 @@ Holds:
 - **`layout`** — `VariableLayout`.
 - **`nx`** — number of spatial nodes.
 - **`mesh`** — `Mesh1D` with coordinates and spacing.
-- **`aux`** — `Dict{Symbol,Any}` for auxiliary data.
-- **`scratch`** — `Dict{Symbol,Any}` for pre-allocated working arrays (populated lazily
-  by operators via `get!(ctx.scratch, key) do ... end`).
+- **`aux`** — auxiliary model data.
+- **`scratch`** — pre-allocated working arrays and workspaces used by operators.
+
+In the refactored codebase, `scratch` is part of the core performance boundary: operator
+composition and the Hotgates bridge reuse buffers from `ctx.scratch` instead of
+allocating new arrays in hot paths.
 
 ## SolverConfig and Solve Pipeline
 
@@ -304,6 +307,7 @@ Holds:
 - **`algorithm`** — SciML algorithm, e.g. `Rodas5(autodiff=AutoFiniteDiff())`.
 - **`abstol`, `reltol`** — solver tolerances.
 - **`saveat`** — output times.
+- **`dt`** — optional fixed time step or split macro-step.
 
 ### Pipeline
 
@@ -314,3 +318,16 @@ result = wrap_result(model, sol, config)
 
 `solve_problem` calls `build_problem`, which dispatches on the formulation to construct
 the `ODEProblem` (with sparse Jacobian if available), then calls `SciMLBase.solve`.
+
+## Config Layer Boundary
+
+The core architecture above is intentionally separate from the config-driven problem
+layer:
+
+- `load_config(path)` parses TOML into typed config structs
+- `validate(cfg)` checks the config before solver construction
+- `build_problem(cfg::ProblemConfig)` assembles a `SimulationProblem`
+- `solve(problem::SimulationProblem)` executes the core solve path
+
+This keeps the solver framework extensible for direct Julia use while still supporting
+input-deck workflows for built-in problem templates.

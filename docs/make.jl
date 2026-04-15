@@ -3,10 +3,11 @@ using Flopsy
 
 makedocs(
     sitename = "Flopsy.jl",
-    format   = Documenter.HTML(),
+    format   = Documenter.HTML(edit_link = "main"),
     modules  = [Flopsy],
     pages    = [
         "Home"              => "index.md",
+        "Configuration"     => "configuration.md",
         "Architecture"      => "architecture.md",
         "Formulations"      => "formulations.md",
         "Hotgates Interface" => "hotgates.md",

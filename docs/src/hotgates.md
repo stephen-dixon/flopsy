@@ -354,18 +354,20 @@ using Flopsy
 
 # Stage 1: Implantation
 model_implant = ...
+u0_implant = ...
+tspan_implant = ...
 config_implant = ...
-result_implant = run_simulation(model_implant, config_implant)
+sol_implant = solve_problem(model_implant, u0_implant, tspan_implant, config_implant)
+result_implant = wrap_result(model_implant, sol_implant, config_implant)
 write_field_output_hdf5(result_implant, "implant_out.h5")
 
 # Stage 2: TDS from implanted state
 model_tds = ...  # may have different variable set or mesh
+config_tds = ...
+tspan_tds = ...
 u0 = load_ic_from_hdf5("implant_out.h5", model_tds)
-# u0 is ready to pass to solve_problem
-result_tds = solve_problem(
-    build_problem(model_tds, config_tds, u0),
-    config_tds,
-)
+sol_tds = solve_problem(model_tds, u0, tspan_tds, config_tds)
+result_tds = wrap_result(model_tds, sol_tds, config_tds)
 ```
 
 ### Behavior

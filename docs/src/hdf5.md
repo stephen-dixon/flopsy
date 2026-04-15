@@ -99,14 +99,16 @@ zero-initialised with a warning.
 using Flopsy
 
 # --- Stage 1: implantation ---
-result_impl = solve_problem(model_impl, u0_impl, tspan_impl, config_impl)
+sol_impl = solve_problem(model_impl, u0_impl, tspan_impl, config_impl)
+result_impl = wrap_result(model_impl, sol_impl, config_impl)
 write_field_output_hdf5(result_impl, "implant.h5")
 
 # --- Stage 2: TDS ramp starting from the implanted state ---
 u0_tds = load_ic_from_hdf5("implant.h5", model_tds)               # load final state
 # or: load_ic_from_hdf5("implant.h5", model_tds; time_index = 10) # load nth saved time
 
-result_tds = solve_problem(model_tds, u0_tds, tspan_tds, config_tds)
+sol_tds = solve_problem(model_tds, u0_tds, tspan_tds, config_tds)
+result_tds = wrap_result(model_tds, sol_tds, config_tds)
 ```
 
 ## Reading in Python

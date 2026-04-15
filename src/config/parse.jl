@@ -1,10 +1,21 @@
 using TOML
 
+"""
+    load_config(path) -> ProblemConfig
+
+Load a TOML input deck and parse it into a typed `ProblemConfig`.
+"""
 function load_config(path::AbstractString)
     raw = TOML.parsefile(path)
     return parse_config(raw)
 end
 
+"""
+    parse_config(raw) -> ProblemConfig
+
+Parse an `AbstractDict` containing TOML-like input into the typed config
+objects used by the problem factory.
+"""
 function parse_config(raw::AbstractDict)
     cfg = _normalize_legacy_config(raw)
     mesh = _parse_mesh_config(_required_table(cfg, "mesh"))

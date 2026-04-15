@@ -2,13 +2,26 @@
 
 ![Logo](./docs/flopsy.png)
 
-A Julia package for stiff 1D reaction-diffusion problems, targeting hydrogen transport
-through materials.  Composable operators, multiple time-integration formulations, and
-integration with the Palioxis trapping library.
+A Julia package for stiff 1D reaction-diffusion problems, with a type-stable core solver
+framework and a thin TOML-driven problem layer for supported input-deck workflows.
 
 ---
 
-## Quickstart
+## Design
+
+Flopsy is split into two layers:
+
+- `core`: programmable Julia APIs for models, operators, formulations, boundary
+  conditions, and solver integration
+- `config/problem layer`: typed TOML parsing, validation, and factory-built problem
+  templates
+
+Both paths use the same underlying `SystemModel` and solver stack. The TOML layer is a
+wrapper over the core, not a separate execution architecture.
+
+---
+
+## Quickstart: programmable core
 
 ### Build a trapping model and solve it
 
@@ -50,6 +63,32 @@ result = wrap_result(model, solve_problem(model, u0, tspan, config), config)
 write_summary_csv(result, "summary.csv")
 write_field_output_hdf5(result, "fields.h5")
 ```
+
+---
+
+## Quickstart: TOML input deck
+
+```julia
+using Flopsy
+
+cfg = load_config("examples/trapping_1d.toml")
+problem = build_problem(cfg)
+result = solve(problem)
+```
+
+Or from the command line:
+
+```bash
+julia --project=. scripts/run_from_toml.jl examples/trapping_1d.toml
+```
+
+Built-in problem classes currently exposed through TOML are:
+
+- `diffusion_1d`
+- `trapping_1d`
+- `hotgates_trapping`
+
+See `examples/*.toml` for the structured schema.
 
 ---
 
@@ -184,11 +223,12 @@ record_spatial_video(result, "spatial_evolution.mp4"; fps = 24)
 
 Full documentation is built with Documenter.jl:
 
-```
+```bash
 julia --project=docs docs/make.jl
 ```
 
 Key pages:
+- **Configuration** — typed config objects, validation, and problem templates
 - **Architecture** — state vector layout, operators, Jacobian sparsity
 - **Formulations** — all formulations with worked examples
 - **Hotgates Interface** — Palioxis integration, equilibrium ICs, boundary conditions

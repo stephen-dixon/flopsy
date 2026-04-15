@@ -1,3 +1,8 @@
+"""
+    build_problem(cfg::ProblemConfig) -> SimulationProblem
+
+Build a fully assembled `SimulationProblem` from a typed configuration.
+"""
 function build_problem(cfg::ProblemConfig)
     validate(cfg)
     template = _select_problem_template(cfg.problem_type)
@@ -65,6 +70,11 @@ function _build_algorithm(algorithm::Symbol)
     throw(ArgumentError("Unsupported solver algorithm $(algorithm)"))
 end
 
+"""
+    solve(problem::SimulationProblem) -> SimulationResult
+
+Solve a config-built `SimulationProblem` and return a wrapped result.
+"""
 function solve(problem::SimulationProblem)
     sol = solve_problem(problem.model, problem.u0, problem.tspan, problem.solver_config)
     metadata = Dict{String,Any}(
@@ -78,6 +88,11 @@ function solve(problem::SimulationProblem)
     return wrap_result(problem.model, sol, problem.config; metadata = metadata)
 end
 
+"""
+    run_simulation(config_path) -> SimulationResult
+
+Load a TOML input deck, build a `SimulationProblem`, and solve it.
+"""
 function run_simulation(config_path::AbstractString)
     cfg = load_config(config_path)
     problem = build_problem(cfg)
