@@ -77,8 +77,16 @@ Solve a config-built `SimulationProblem` and return a wrapped result.
 """
 function solve(problem::SimulationProblem)
     sol = solve_problem(problem.model, problem.u0, problem.tspan, problem.solver_config)
+    problem_type =
+        if hasproperty(problem.config, :problem_type)
+            getproperty(problem.config, :problem_type)
+        elseif hasproperty(problem.config, :type_name)
+            getproperty(problem.config, :type_name)
+        else
+            :simulation
+        end
     metadata = Dict{String, Any}(
-        "problem_type" => string(problem.config.problem_type),
+        "problem_type" => string(problem_type),
         "algorithm" => string(typeof(problem.solver_config.algorithm)),
         "formulation" => string(typeof(problem.solver_config.formulation)),
         "nx" => problem.model.context.nx,
@@ -94,6 +102,10 @@ end
 Load a TOML input deck, build a `SimulationProblem`, and solve it.
 """
 function run_simulation(config_path::AbstractString)
+    raw = TOML.parsefile(config_path)
+    if haskey(raw, "problem")
+        return run_input_deck(config_path)
+    end
     cfg = load_config(config_path)
     problem = build_problem(cfg)
     return solve(problem)

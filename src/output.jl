@@ -191,6 +191,62 @@ function write_field_output_hdf5(result::SimulationResult, path::AbstractString)
 end
 
 """
+    write_xdmf_for_flopsy_h5(h5_path, xdmf_path=nothing) -> String
+
+Generate an XDMF companion file for a Flopsy HDF5 field output file so the
+result can be opened directly in ParaView.
+"""
+function write_xdmf_for_flopsy_h5(h5_path::AbstractString, xdmf_path = nothing)
+    out = xdmf_path === nothing ? replace(h5_path, r"\.h5$" => ".xdmf") : String(xdmf_path)
+    h5_ref = basename(h5_path)
+
+    times = Float64[]
+    x = Float64[]
+    field_names = String[]
+    h5open(h5_path, "r") do h5
+        times = read(h5["time"])
+        x = read(h5["mesh/x"])
+        field_names = sort!(collect(String.(keys(h5["fields"]))))
+    end
+
+    nt = length(times)
+    nx = length(x)
+
+    open(out, "w") do io
+        println(io, "<?xml version=\"1.0\" ?>")
+        println(io, "<Xdmf Version=\"3.0\">")
+        println(io, "  <Domain>")
+        println(io, "    <Grid Name=\"TimeSeries\" GridType=\"Collection\" CollectionType=\"Temporal\">")
+        for (it, tval) in enumerate(times)
+            println(io, "      <Grid Name=\"step_$(it - 1)\" GridType=\"Uniform\">")
+            println(io, "        <Time Value=\"$(Float64(tval))\"/>")
+            println(io, "        <Topology TopologyType=\"1DSMesh\" NumberOfElements=\"$(nx)\"/>")
+            println(io, "        <Geometry GeometryType=\"X\">")
+            println(io, "          <DataItem Format=\"HDF\" Dimensions=\"$(nx)\" NumberType=\"Float\" Precision=\"8\">$(h5_ref):/mesh/x</DataItem>")
+            println(io, "        </Geometry>")
+            for name in field_names
+                println(io, "        <Attribute Name=\"$(name)\" AttributeType=\"Scalar\" Center=\"Node\">")
+                println(io, "          <DataItem ItemType=\"HyperSlab\" Dimensions=\"$(nx)\" Type=\"HyperSlab\">")
+                println(io, "            <DataItem Dimensions=\"3 2\" Format=\"XML\">")
+                println(io, "              $(it - 1) 0")
+                println(io, "              1 1")
+                println(io, "              1 $(nx)")
+                println(io, "            </DataItem>")
+                println(io, "            <DataItem Format=\"HDF\" Dimensions=\"$(nt) $(nx)\" NumberType=\"Float\" Precision=\"8\">$(h5_ref):/fields/$(name)</DataItem>")
+                println(io, "          </DataItem>")
+                println(io, "        </Attribute>")
+            end
+            println(io, "      </Grid>")
+        end
+        println(io, "    </Grid>")
+        println(io, "  </Domain>")
+        println(io, "</Xdmf>")
+    end
+
+    return out
+end
+
+"""
     load_ic_from_hdf5(path, model; time_index=:last) -> Vector{Float64}
 
 Load an initial condition from a previously written HDF5 field output file.

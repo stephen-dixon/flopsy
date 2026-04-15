@@ -63,10 +63,10 @@
     end
 
     @testset "commented example with BC and IC loads and solves" begin
-        cfg = load_config(joinpath(@__DIR__, "..", "examples", "trapping_1d_with_bc_ic.toml"))
-        @test cfg.initial_conditions.kind === :uniform
-        @test length(cfg.boundary_conditions) == 2
-        result = solve(build_problem(cfg))
+        deck = parse_input_deck(joinpath(@__DIR__, "..", "examples", "trapping_1d_with_bc_ic.toml"))
+        ctx = build_context(deck)
+        @test length(ctx.bcs) == 2
+        result = solve(build_simulation(ctx))
         @test result.solution.t == [0.0, 0.25, 0.5, 0.75, 1.0]
     end
 end

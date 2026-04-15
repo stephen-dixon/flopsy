@@ -17,4 +17,5 @@ using OrdinaryDiffEq: Rodas5, Rodas5P, KenCarp4
     include("test_trapping.jl")
     include("test_formulations.jl")
     include("test_config.jl")
+    include("test_registry_cli.jl")
 end

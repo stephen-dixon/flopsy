@@ -1,0 +1,37 @@
+[mesh.main]
+type = "uniform_1d"
+xmin = 0.0
+xmax = 1.0
+nx = 81
+
+[backend.main]
+type = "diffusion_1d"
+diffusion_coefficient = 0.02
+reaction_rate = 0.0
+species_name = "u"
+
+[ic.u0]
+type = "uniform_species"
+species = "u"
+value = 1.0
+
+[output.fields]
+type = "hdf5"
+file = "closed_system_fields.h5"
+xdmf = false
+
+[problem.run]
+# No [bc.*] blocks are supplied here.
+# That means the diffusion operator keeps its default zero-flux Neumann /
+# closed-boundary behaviour.
+type = "simulation"
+mesh = "main"
+backend = "main"
+ics = ["u0"]
+outputs = ["fields"]
+tspan = [0.0, 0.5]
+formulation = "unsplit"
+algorithm = "Rodas5"
+abstol = 1e-8
+reltol = 1e-6
+saveat = [0.0, 0.25, 0.5]

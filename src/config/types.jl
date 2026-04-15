@@ -39,9 +39,9 @@ struct InputSolverConfig{A, T, S}
 end
 
 """
-    ProblemConfig
+    InitialConditionConfig
 
-Typed top-level problem configuration used by the factory-built problem layer.
+Typed initial-condition specification used by the factory-built problem layer.
 """
 struct InitialConditionConfig{T}
     kind::Symbol
@@ -79,6 +79,11 @@ function InitialConditionConfig(
     )
 end
 
+"""
+    ProblemConfig
+
+Typed top-level problem configuration used by the factory-built problem layer.
+"""
 struct ProblemConfig{M, S, BC, IC, P}
     problem_type::Symbol
     mesh::M

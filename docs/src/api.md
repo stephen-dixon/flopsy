@@ -45,6 +45,7 @@ SimulationProblem
 MeshConfig
 BoundaryConditionConfig
 InputSolverConfig
+InitialConditionConfig
 ProblemConfig
 load_config
 parse_config
@@ -184,6 +185,7 @@ surface_diffusive_fluxes
 check_mass_conservation
 build_summary_dataframe
 write_field_output_hdf5
+write_xdmf_for_flopsy_h5
 write_summary_csv
 load_ic_from_hdf5
 print_run_banner

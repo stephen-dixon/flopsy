@@ -43,6 +43,11 @@ include("core/hotgates_adapter.jl")
 include("config/types.jl")
 include("config/parse.jl")
 include("config/validate.jl")
+include("config/runtime_types.jl")
+include("config/plugins.jl")
+include("config/registry.jl")
+include("config/syntax_builtins.jl")
+include("config/runtime_build.jl")
 include("problem_templates/diffusion_1d.jl")
 include("problem_templates/trapping_1d.jl")
 include("problem_templates/hotgates_trapping.jl")
@@ -51,6 +56,7 @@ include("problem_factory/build_problem.jl")
 include("progress.jl")
 include("output.jl")
 include("plotting.jl")
+include("cli.jl")
 
 export
        AbstractSystemModel,
@@ -68,7 +74,22 @@ export
        MeshConfig,
        BoundaryConditionConfig,
        InputSolverConfig,
-       ProblemConfig, nvariables,
+       ProblemConfig,
+       InitialConditionConfig,
+       ParameterSpec,
+       SyntaxSpec,
+       SyntaxRegistry,
+       BuildContext,
+       ConfigBlock,
+       InputDeck,
+       SpeciesInfo,
+       BackendDefinition,
+       ICDefinition,
+       BCDefinition,
+       OutputDefinition,
+       ProblemDefinition,
+       ConfiguredSimulation,
+       nvariables,
        variable_names,
        variables_in_group,
        variables_with_tag,
@@ -115,6 +136,22 @@ export
        solve, load_config,
        parse_config,
        validate,
+       parse_input_deck,
+       build_context,
+       build_simulation,
+       build_registry,
+       register_syntax!,
+       lookup_syntax,
+       syntax_list,
+       syntax_show,
+       validate_input_deck,
+       run_input_deck,
+       register_plugin_provider!,
+       plugin_list,
+       plugin_register!,
+       plugin_remove!,
+       cli_main,
+       julia_main,
        run_simulation, SimulationResult,
        wrap_result,
        variable_timeseries,
@@ -123,6 +160,7 @@ export
        surface_diffusive_fluxes,
        build_summary_dataframe,
        write_field_output_hdf5,
+       write_xdmf_for_flopsy_h5,
        write_summary_csv,
        load_ic_from_hdf5,
        print_run_banner,

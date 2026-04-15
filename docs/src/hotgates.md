@@ -2,9 +2,15 @@
 
 ## Motivation
 
-Palioxis is a high-fidelity Fortran library for modeling multi-occupancy hydrogen trapping in materials. It accurately captures the complex kinetics of hydrogen binding to defect sites, detrapping barriers, and site saturation effects. The Hotgates library provides language bindings that make Palioxis accessible from higher-level environments.
+Palioxis provides high-fidelity multi-occupancy hydrogen trapping kinetics. Flopsy integrates that functionality without baking Palioxis-specific TOML parsing into the core registry.
 
-Flopsy integrates Palioxis trapping kinetics through a dedicated adapter layer: the `HotgatesReactionOperator` and `HotgatesTrappingAdaptor`. This integration allows spatially-resolved 1D reaction-diffusion simulations to benefit from Palioxis's sophisticated defect models while remaining composable with other Flopsy operators.
+Today the Palioxis implementation stays in this repository via `ext/PalioxisExt.jl`, but it is structured like a plugin:
+
+- it registers backend syntax into the shared syntax registry
+- it registers backend-derived IC syntax such as `palioxis_equilibrium`
+- it exposes backend-owned species metadata to the core validator
+
+That separation keeps Flopsy core generic while preserving Palioxis support.
 
 ## HotgatesTrappingAdaptor
 
@@ -75,7 +81,7 @@ This mock allows unit tests and diagnostic runs to proceed without external depe
 
 ## PalioxisExt
 
-The `PalioxisExt` is a Julia 1.9+ package extension (loaded automatically when both `Palioxis` and `Flopsy` are imported). It dispatches `hotgates_rates!` to the actual Palioxis library.
+`PalioxisExt` is a Julia package extension loaded when both `Flopsy` and `Palioxis` are available. It dispatches `hotgates_rates!` to the actual Palioxis library and registers Palioxis-specific TOML syntax.
 
 ### Activating PalioxisExt
 
@@ -86,7 +92,26 @@ using Flopsy
 using Palioxis
 ```
 
-The extension is triggered automatically by importing `Palioxis` and connects Flopsy to the Palioxis backend.
+The extension is triggered automatically by importing `Palioxis` and makes Palioxis syntax available to the registry.
+
+## Registered Palioxis syntax
+
+Palioxis syntax is not hard-coded in the Flopsy core built-ins. It is registered from the extension layer.
+
+Current extension-provided syntax includes:
+
+- `backend.palioxis_trapping`
+- `ic.palioxis_equilibrium`
+
+If Palioxis is unavailable, those syntax entries are unavailable as well. The registry will then fail cleanly with an unknown-syntax error rather than failing later inside the solver.
+
+You can inspect the live registry with:
+
+```bash
+flopsy syntax list
+flopsy syntax show backend palioxis_trapping
+flopsy syntax show ic palioxis_equilibrium
+```
 
 ### Building a Palioxis Trapping Model
 
@@ -141,7 +166,30 @@ through the `palioxis_model` handle:
 
 ## Equilibrium Initial Conditions
 
-For TDS desorption experiments, it is common to start with hydrogen trapped in defects at some initial temperature, having negligible mobile concentration. The `build_equilibrium_ic` function sets trapped species to Palioxis equilibrium given a mobile profile:
+For TDS desorption experiments, it is common to start from an equilibrium trapped distribution. Flopsy supports that in two ways:
+
+- direct Julia helpers such as `build_equilibrium_ic` and `build_ic_from_total_hydrogen`
+- a registered backend-derived IC syntax, `palioxis_equilibrium`
+
+The config-driven form is useful because it can populate multiple backend-defined species without requiring user-declared variable blocks.
+
+Example:
+
+```toml
+[backend.main]
+type = "palioxis_trapping"
+
+[ic.eq]
+type = "palioxis_equilibrium"
+backend = "main"
+driving_quantity = "H_total"
+value = 1e-3
+temperature = 500.0
+```
+
+This IC validates against backend species metadata and reports the species it affects, so overlap detection works consistently with species-targeted ICs.
+
+The underlying Julia helper path remains available:
 
 ```julia
 using Flopsy
@@ -232,11 +280,28 @@ By default, `LinearDiffusionOperator` implements zero-flux (Neumann) boundary co
 ∂u/∂n = 0
 ```
 
-This is suitable for sealed boundaries or materials where external diffusion is negligible.
+This is suitable for sealed boundaries or materials where external diffusion is negligible. In the TOML layer, this is the behaviour you get by omitting `[bc.*]` blocks entirely.
 
 ### Dirichlet Boundary Conditions
 
-For surface absorption/desorption, use `WeakDirichletBoundaryOperator` to impose fixed surface concentrations via ghost-node corrections:
+For surface absorption/desorption, use `WeakDirichletBoundaryOperator` or `DirichletBoundaryOperator`.
+
+In the TOML layer, current explicit BC syntax is species-targeted `dirichlet` only. Example:
+
+```toml
+[bc.left_H]
+type = "dirichlet"
+species = "H_mobile"
+boundary = "left"
+value = 0.0
+method = "weak"
+```
+
+BC validation checks that:
+
+- the named species exists on the selected backend
+- the species is a valid boundary target
+- the species supports diffusive transport
 
 ```julia
 boundary = WeakDirichletBoundaryOperator(

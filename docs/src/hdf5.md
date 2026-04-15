@@ -1,7 +1,36 @@
 # HDF5 Output
 
-Flopsy writes field output to HDF5 files, which are self-documenting, efficient for large
-spatiotemporal datasets, and readable from Julia, Python, and other languages.
+Flopsy writes field output to HDF5 files and can generate an XDMF companion so the results can be opened directly in ParaView.
+
+## Producing output from TOML
+
+The built-in output syntax is:
+
+```toml
+[output.fields]
+type = "hdf5"
+file = "fields.h5"
+xdmf = true
+```
+
+If `xdmf = true`, Flopsy writes the HDF5 file and then emits a matching `.xdmf` companion automatically.
+
+You can also generate the companion afterwards:
+
+```bash
+flopsy xdmf fields.h5
+flopsy xdmf fields.h5 --output custom_name.xdmf
+```
+
+## ParaView workflow
+
+For ParaView:
+
+1. run the simulation and produce `fields.h5`
+2. generate or request the matching `.xdmf`
+3. open the `.xdmf` file in ParaView
+
+The XDMF file references the HDF5 datasets rather than duplicating the field data.
 
 ## File Structure
 
@@ -17,8 +46,7 @@ Files written by `write_field_output_hdf5(result, path)` follow this layout:
                       e.g. model_type, xml_file, retcode, walltime_s, ...
 ```
 
-Variable names are Julia Symbols (e.g. `:mobile_H`) stored as plain strings in the HDF5 file.
-The field matrices are indexed `[time_index, node_index]` — time is the slow (outer) axis.
+Variable names are Julia Symbols stored as plain strings in the HDF5 file. The field matrices are indexed `[time_index, node_index]`.
 
 ## Reading in Julia
 
@@ -180,6 +208,19 @@ plt.title("TDS desorption spectrum")
 plt.tight_layout()
 plt.savefig("tds_spectrum.png", dpi=150)
 ```
+
+## XDMF helper
+
+Flopsy provides a native helper:
+
+```julia
+using Flopsy
+
+write_xdmf_for_flopsy_h5("fields.h5")
+write_xdmf_for_flopsy_h5("fields.h5", "fields_custom.xdmf")
+```
+
+The CLI `flopsy xdmf` subcommand is a thin wrapper over the same functionality.
 
 ## Output functions reference
 
