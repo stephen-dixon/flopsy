@@ -10,6 +10,7 @@ operator-split methods and DAE quasi-static approximations.
 |---|---|---|---|
 | `UnsplitFormulation` | Monolithic ODE | `Rodas5P()`, `CVODE_BDF()` | Default; stiff problems with analytic Jacobian |
 | `IMEXFormulation` | IMEX split ODE | `KenCarp4()` | Diffusion-dominated stiffness |
+| `IMEXReactionFormulation` | IMEX split ODE (reaction implicit) | `KenCarp4()` | Reaction-dominated stiffness |
 | `SplitFormulation(LieSplit())` | Operator split | `Rodas5(autodiff=AutoFiniteDiff())` | Physical process separation, 1st order |
 | `SplitFormulation(StrangSplit())` | Operator split | `Rodas5(autodiff=AutoFiniteDiff())` | Physical process separation, 2nd order |
 | `ResidualFormulation` | Mass-matrix DAE | `Rodas5P()` | Quasi-static trapping (fast trapping limit) |
@@ -124,6 +125,38 @@ config = SolverConfig(
 
 result = wrap_result(model, solve_problem(model, u0, tspan, config), config)
 ```
+
+---
+
+## IMEXReactionFormulation
+
+Like `IMEXFormulation` but with the partition swapped: the *reaction* operators form the
+stiff **implicit** part and the *diffusion + boundary* operators are the **explicit** part.
+Use this when trapping kinetics (not diffusion) dominate the stiffness.
+
+When the reaction operator provides an analytic Jacobian (e.g. `SimpleTrappingReactionOperator`),
+`build_problem` constructs an `ODEFunction` with a sparse Jacobian for the implicit part,
+reducing the cost of each Newton iteration.
+
+```julia
+using Flopsy
+using OrdinaryDiffEq
+
+config = SolverConfig(
+    formulation = IMEXReactionFormulation(),
+    algorithm   = KenCarp4(),
+    abstol      = 1e-9,
+    reltol      = 1e-7,
+    saveat      = collect(saveat_times),
+)
+
+result = wrap_result(model, solve_problem(model, u0, tspan, config), config)
+```
+
+!!! note
+    The implicit reaction Jacobian path is exercised when the model's `reaction` operator
+    returns `true` from `supports_jacobian`.  For `HotgatesReactionOperator` this is
+    `false`; the solver falls back to finite-difference differentiation for that part.
 
 ---
 

@@ -24,6 +24,9 @@ function jacobian!(J, op::ToyReactionOperator, u, ctx::SystemContext, t)
     return J
 end
 
+jacobian_node_sparsity(::ToyReactionOperator, layout) =
+    Set{Tuple{Int,Int}}((i, i) for i in 1:nvariables(layout))
+
 
 """
     SimpleTrappingReactionOperator(k_trap, k_detrap, mobile_index, trap_index)
@@ -103,4 +106,10 @@ function jacobian!(J, op::SimpleTrappingReactionOperator, u, ctx::SystemContext,
     end
 
     return J
+end
+
+function jacobian_node_sparsity(op::SimpleTrappingReactionOperator, layout)
+    im = op.mobile_index
+    it = op.trap_index
+    return Set{Tuple{Int,Int}}([(im, im), (im, it), (it, im), (it, it)])
 end

@@ -11,6 +11,11 @@ Fields:
                       shape `(n_defects, nx)`.  Column `ix` is the defect vector
                       at node `ix`.  Use `zeros(Float64, 0, nx)` for backends
                       that do not require defect data (e.g. FakeHotgatesModel).
+- `trap_groups`     — groups of positions (1-based) within `trap_indices` that belong to
+                      the same defect type.  Used to determine the per-node Jacobian sparsity
+                      pattern: trap levels within a group are coupled (tridiagonal block);
+                      levels in different groups are not coupled.
+                      Default (6-arg constructor): each trap in its own singleton group.
 """
 struct HotgatesTrappingAdaptor{I,N}
     mobile_indices::Vector{I}
@@ -19,6 +24,23 @@ struct HotgatesTrappingAdaptor{I,N}
     trap_names::Vector{N}
     defect_names::Vector{N}
     defects::Matrix{Float64}
+    trap_groups::Vector{Vector{Int}}
+end
+
+"""
+    HotgatesTrappingAdaptor(mobile, trap, mob_names, trap_names, def_names, defects)
+
+Backward-compatible 6-argument constructor.  Sets `trap_groups` so each trap species
+is its own singleton group (no intra-group coupling assumed — fully diagonal trap-trap
+Jacobian block).  Override by supplying the 7-argument form when defect types have
+multiple fill levels that are coupled (e.g. Palioxis multi-occupancy trapping).
+"""
+function HotgatesTrappingAdaptor(mobile_indices, trap_indices, mobile_names,
+                                   trap_names, defect_names, defects)
+    nt = length(trap_indices)
+    trap_groups = [[i] for i in 1:nt]
+    return HotgatesTrappingAdaptor(mobile_indices, trap_indices, mobile_names,
+                                    trap_names, defect_names, defects, trap_groups)
 end
 
 
@@ -37,6 +59,53 @@ supports_rhs(::HotgatesReactionOperator) = true
 # supports_jacobian for HotgatesReactionOperator{<:Palioxis.MultipleDefectModel}
 # and implements hotgates_jacobian! via time_derivatives_jacobian.
 supports_jacobian(::HotgatesReactionOperator) = false
+
+"""
+    jacobian_node_sparsity(op::HotgatesReactionOperator, layout)
+
+Per-node Jacobian sparsity derived from the adaptor's `trap_groups`:
+- Mobile-mobile block: fully dense
+- Mobile-trap and trap-mobile blocks: fully dense
+- Trap-trap block: tridiagonal within each group (adjacent occupancy levels couple)
+
+`trap_groups` is set at adaptor construction time — use the 7-argument
+`HotgatesTrappingAdaptor` constructor with defect-type groupings for Palioxis
+multi-occupancy models, or leave the default (each trap its own singleton group)
+for backends with independent trap species.
+"""
+function jacobian_node_sparsity(op::HotgatesReactionOperator, layout)
+    adaptor = op.adaptor
+    m_idxs  = adaptor.mobile_indices
+    t_idxs  = adaptor.trap_indices
+    entries = Set{Tuple{Int,Int}}()
+
+    # Mobile-mobile block (dense)
+    for cm in m_idxs, rm in m_idxs
+        push!(entries, (rm, cm))
+    end
+
+    # Mobile←trap and trap←mobile blocks (dense)
+    for ct in t_idxs, rm in m_idxs
+        push!(entries, (rm, ct))
+    end
+    for cm in m_idxs, rt in t_idxs
+        push!(entries, (rt, cm))
+    end
+
+    # Trap-trap: tridiagonal within each group (adjacent levels are coupled)
+    for group in adaptor.trap_groups
+        gvars = t_idxs[group]  # actual variable indices for this group
+        for k in eachindex(gvars)
+            push!(entries, (gvars[k], gvars[k]))            # diagonal
+            if k > 1
+                push!(entries, (gvars[k],   gvars[k - 1])) # sub-diagonal
+                push!(entries, (gvars[k - 1], gvars[k]))   # super-diagonal
+            end
+        end
+    end
+
+    return entries
+end
 
 
 """

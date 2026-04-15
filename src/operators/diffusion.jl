@@ -47,6 +47,8 @@ supports_rhs(::LinearDiffusionOperator) = true
 supports_jacobian(::LinearDiffusionOperator) = true
 
 diffusion_variable_indices(op::LinearDiffusionOperator, layout) = op.selector(layout)
+jacobian_node_sparsity(op::LinearDiffusionOperator, layout) =
+    Set{Tuple{Int,Int}}((iv, iv) for iv in op.selector(layout))
 
 function rhs!(du, op::LinearDiffusionOperator, u, ctx::SystemContext, t)
     layout = ctx.layout
@@ -149,6 +151,8 @@ supports_rhs(::WeakDirichletBoundaryOperator) = true
 supports_jacobian(::WeakDirichletBoundaryOperator) = true
 
 diffusion_variable_indices(op::WeakDirichletBoundaryOperator, layout) = op.selector(layout)
+jacobian_node_sparsity(op::WeakDirichletBoundaryOperator, layout) =
+    Set{Tuple{Int,Int}}((iv, iv) for iv in op.selector(layout))
 
 function rhs!(du, op::WeakDirichletBoundaryOperator, u, ctx::SystemContext, t)
     layout = ctx.layout
@@ -319,6 +323,15 @@ supports_jacobian(::DirichletBoundaryOperator{<:CallbackMethod})   = true
 supports_jacobian(::DirichletBoundaryOperator{<:EliminatedMethod}) = true
 
 supports_mass_matrix(op::DirichletBoundaryOperator{<:MassMatrixMethod}) = true
+
+jacobian_node_sparsity(op::DirichletBoundaryOperator{<:PenaltyMethod}, layout) =
+    Set{Tuple{Int,Int}}((iv, iv) for iv in op.selector(layout))
+jacobian_node_sparsity(op::DirichletBoundaryOperator{<:MassMatrixMethod}, layout) =
+    Set{Tuple{Int,Int}}((iv, iv) for iv in op.selector(layout))
+jacobian_node_sparsity(::DirichletBoundaryOperator{<:CallbackMethod}, layout) =
+    Set{Tuple{Int,Int}}()
+# EliminatedMethod modifies inter-node entries → cannot be captured in a per-node pattern
+jacobian_node_sparsity(::DirichletBoundaryOperator{<:EliminatedMethod}, layout) = nothing
 
 
 # ---------------------------------------------------------------------------

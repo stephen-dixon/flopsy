@@ -142,6 +142,7 @@ export
     load_ic_from_hdf5,
     print_run_banner,
     solver_stats_dict,
+    check_mass_conservation,
 
     AbstractTemperatureProvider,
     ConstantTemperature,

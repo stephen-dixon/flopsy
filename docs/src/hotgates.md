@@ -16,6 +16,11 @@ The `HotgatesTrappingAdaptor` holds the configuration and metadata required to i
 - **trap_names** — species names for trapped variables
 - **defect_names** — species names for defect sites (not in the state vector)
 - **defects** — a `(n_defects, nx)` matrix of static, spatially-varying defect densities. Each column `ix` contains the densities of all defect types at spatial node `ix`.
+- **trap_groups** — `Vector{Vector{Int}}` grouping trap variable indices by defect type.
+  Each inner vector lists the indices (within `trap_indices`) that belong to one defect
+  type.  Used by `jacobian_node_sparsity` to construct a selective sparse Jacobian
+  prototype: trap–trap entries are tridiagonal *within* each group, and dense between
+  groups.  Defaults to singleton groups (each trap in its own group, fully block-diagonal).
 
 The key design choice is that **defect densities are spatially varying but static in time**. This allows the trapping model to be computed independently at each node without global communication, while still respecting material heterogeneity.
 
@@ -231,10 +236,10 @@ This is suitable for sealed boundaries or materials where external diffusion is 
 
 ### Dirichlet Boundary Conditions
 
-For surface absorption/desorption, use `DirichletBoundaryOperator` to impose fixed surface concentrations:
+For surface absorption/desorption, use `WeakDirichletBoundaryOperator` to impose fixed surface concentrations via ghost-node corrections:
 
 ```julia
-boundary = DirichletBoundaryOperator(
+boundary = WeakDirichletBoundaryOperator(
     selector,
     diffusion_coefficients;
     left  = t -> 0.0,        # vacuum at left surface
@@ -249,6 +254,11 @@ dU[1] += D * (U[2] - 2*U[1] + g) / dx²
 ```
 
 where `g = left(t)` or `g = right(t)` is the Dirichlet value.
+
+For stronger enforcement (e.g. when the ghost-node approach is insufficient), use
+`DirichletBoundaryOperator` with `PenaltyMethod`, `MassMatrixMethod`, `CallbackMethod`,
+or `EliminatedMethod`.  See **[Architecture → Boundary Condition Operators](architecture.md)**
+for a comparison.
 
 ### Time-Varying Boundary Conditions
 
@@ -270,6 +280,31 @@ boundary = DirichletBoundaryOperator(
 ### Alternative: Chaining Simulations
 
 For complex multi-phase experiments, the alternative to time-varying boundary conditions is to run separate simulations and chain them via HDF5 (see the next sections). For example: implantation with a fixed source, followed by desorption from the implanted state.
+
+## Mass Conservation Diagnostics
+
+`check_mass_conservation` verifies that the total hydrogen `H(t)` plus the cumulative
+outward diffusive flux equals the initial hydrogen `H(0)`:
+
+```julia
+mc = check_mass_conservation(result; rtol=1e-3)
+mc.conserved           # Bool — true if max relative error < rtol
+mc.max_relative_error  # Float64 — worst-case relative balance error
+mc.total_hydrogen      # Vector{Float64} — H(t) at each saved time
+mc.cumulative_flux     # Vector{Float64} — ∫ flux dτ from t[1] to t[k]
+mc.balance             # Vector{Float64} — H + cumulative_flux (should ≈ H[1])
+```
+
+The flux uses the mass-conserving formula `D*(U[boundary] − g)/dx` from each active
+`WeakDirichletBoundaryOperator`.  Closed systems (Neumann BCs) have no boundary operator
+and the cumulative flux is identically zero; `mc.conserved` is `true` if H is constant
+to within `rtol`.
+
+!!! note "Temporal resolution"
+    `check_mass_conservation` integrates boundary fluxes by the trapezoidal rule over the
+    saved time points.  Accurate mass balance requires that `saveat` is fine enough to
+    resolve the diffusion dynamics (`dt_save ≪ L²/(π²D)`).  For fast-diffusing species
+    or coarse `saveat`, the trapezoidal error can exceed `rtol`.
 
 ## Surface Flux Summaries
 

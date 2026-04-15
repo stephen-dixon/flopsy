@@ -61,9 +61,10 @@ Defaults are `false`; operators opt in by adding the relevant method.
 
 ### Analytic Jacobians
 
-`LinearDiffusionOperator`, `DirichletBoundaryOperator`, `ToyReactionOperator`, and
+`LinearDiffusionOperator`, `WeakDirichletBoundaryOperator`, `ToyReactionOperator`, and
 `SimpleTrappingReactionOperator` all implement `supports_jacobian = true` with analytic
-`jacobian!` methods.
+`jacobian!` methods.  `DirichletBoundaryOperator` provides analytic Jacobians for all
+methods except `EliminatedMethod` (whose cross-node entries are handled symbolically).
 
 The Jacobian structure exploits the known sparsity:
 
@@ -75,9 +76,26 @@ The Jacobian structure exploits the known sparsity:
   prototype by `build_unsplit_problem` when `supports_jacobian` returns `true` for the
   assembled `OperatorSum`.
 
-For models where Jacobian support is unavailable (e.g. `HotgatesReactionOperator`),
-`build_unsplit_problem` falls back to `ODEFunction(f!)` without an explicit Jacobian,
-relying on the algorithm's own differentiation strategy.
+#### Per-node sparsity patterns (`jacobian_node_sparsity`)
+
+Each operator can declare its *per-node* Jacobian non-zero pattern via:
+
+```julia
+jacobian_node_sparsity(op, layout) -> Set{Tuple{Int,Int}} or nothing
+```
+
+The returned set contains `(row_var, col_var)` index pairs for entries that can be
+non-zero within a single node's variable block.  Returning `nothing` signals that the
+operator's per-node pattern is dense (or unknown) and forces a dense fallback.
+
+`_build_jac_prototype` unions the patterns from all active operators; if any returns
+`nothing`, the full dense within-node block is used.  This mechanism is used by
+`HotgatesReactionOperator` to expose a selective trap–trap tridiagonal sparsity when
+defect groups are provided through the `trap_groups` field of `HotgatesTrappingAdaptor`.
+
+For models where Jacobian support is unavailable (e.g. `HotgatesReactionOperator`
+without a `trap_groups` structure), `build_unsplit_problem` falls back to `ODEFunction(f!)`
+without an explicit Jacobian, relying on the algorithm's own differentiation strategy.
 
 ### The RHS Contract
 
@@ -93,20 +111,41 @@ rhs!(du, op, u, ctx, t)
 `OperatorSum.rhs!` zeros `du` before calling each sub-operator, so the total RHS is the
 sum of all operator contributions.
 
-### DirichletBoundaryOperator
+### Boundary Condition Operators
 
-Boundary conditions are operators. `DirichletBoundaryOperator` adds ghost-node Dirichlet
-corrections on top of the zero-flux stencil already in `LinearDiffusionOperator`:
+#### WeakDirichletBoundaryOperator (ghost-node, recommended default)
+
+Adds ghost-node corrections on top of the zero-flux stencil already in
+`LinearDiffusionOperator`:
 
 ```julia
-boundary = DirichletBoundaryOperator(
-    selector, coefficients, temperature;
-    left  = t -> 0.0,
-    right = t -> 0.0,
-)
+boundary = WeakDirichletBoundaryOperator(selector, coefficients, temperature;
+                                          left  = t -> 0.0,
+                                          right = t -> 0.0)
 ```
 
-The combined stencil at node 1 becomes `D*(U[2] - 2*U[1] + g)/dx²`, where `g = left(t)`.
+The combined stencil at node 1 becomes `D*(U[2] - 2*U[1] + g)/dx²`.  Both sides are
+controlled from a single operator; pass `left=nothing` or `right=nothing` to leave a
+surface at zero-flux (Neumann).
+
+#### DirichletBoundaryOperator (strong, per-side)
+
+Strong Dirichlet condition applied to one side at a time.  Four enforcement strategies
+are available (set via the `method` keyword):
+
+| Method | Mechanism | Notes |
+|---|---|---|
+| `PenaltyMethod(λ)` | `du[bdy] += λ*(g-u)` | Adds stiffness ∝ λ; compatible with all solvers |
+| `MassMatrixMethod()` | Algebraic constraint (DAE) | Requires `Rodas5P()` or similar |
+| `CallbackMethod()` | Discrete callback resets `u[bdy]` each step | Exact at step boundaries |
+| `EliminatedMethod()` | Cancels Neumann stencil; sets `du[bdy]=g'(t)` | Best for constant/slow BCs |
+
+```julia
+# Left surface: strong penalty; right surface: ghost-node weak
+left_bc  = DirichletBoundaryOperator(:left,  t -> 0.0, selector; method=PenaltyMethod(1e12))
+right_bc = WeakDirichletBoundaryOperator(selector, coefficients; right = t -> 0.0)
+boundary = OperatorSum((left_bc, right_bc))
+```
 
 ### Composition with OperatorSum
 

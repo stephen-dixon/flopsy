@@ -74,7 +74,13 @@ NullOperator
 OperatorSum
 active_operators
 LinearDiffusionOperator
+WeakDirichletBoundaryOperator
 DirichletBoundaryOperator
+PenaltyMethod
+MassMatrixMethod
+CallbackMethod
+EliminatedMethod
+build_solver_callback
 ToyReactionOperator
 SimpleTrappingReactionOperator
 ConstraintOperator
@@ -97,6 +103,7 @@ mass_matrix
 ```@docs
 UnsplitFormulation
 IMEXFormulation
+IMEXReactionFormulation
 LieSplit
 StrangSplit
 SplitFormulation
@@ -149,6 +156,7 @@ plot_tds_flux
 plot_spatial_snapshot
 plot_spatial_evolution
 record_spatial_video
+record_spatial_animation
 ```
 
 ## Output
@@ -160,6 +168,7 @@ variable_timeseries
 variable_snapshot
 integrated_variable
 surface_diffusive_fluxes
+check_mass_conservation
 build_summary_dataframe
 write_field_output_hdf5
 write_summary_csv

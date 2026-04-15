@@ -47,8 +47,8 @@
         g_left  = 1.0
         g_right = 3.0
 
-        op = DirichletBoundaryOperator(selector_all, [D], nothing;
-                                        left=t -> g_left, right=t -> g_right)
+        op = WeakDirichletBoundaryOperator(selector_all, [D], nothing;
+                                           left=t -> g_left, right=t -> g_right)
 
         u  = zeros(nx)
         du = zeros(nx)
@@ -66,7 +66,7 @@
         dx  = ctx.mesh.dx
         D   = 1.0
 
-        op = DirichletBoundaryOperator(selector_all, [D], nothing; left=t -> 1.0)
+        op = WeakDirichletBoundaryOperator(selector_all, [D], nothing; left=t -> 1.0)
 
         u  = zeros(nx)
         du = zeros(nx)
@@ -84,7 +84,7 @@
         g   = 0.5
 
         diffop   = LinearDiffusionOperator([D], selector_all, nothing)
-        boundop  = DirichletBoundaryOperator(selector_all, [D], nothing; left=t -> g)
+        boundop  = WeakDirichletBoundaryOperator(selector_all, [D], nothing; left=t -> g)
 
         u  = collect(Float64, 1:nx)
         du = zeros(nx)
@@ -112,7 +112,7 @@
     @testset "supports_jacobian flags" begin
         selector = layout -> [1]
         @test supports_jacobian(LinearDiffusionOperator([1.0], selector, nothing))
-        @test supports_jacobian(DirichletBoundaryOperator(selector, [1.0], nothing; left=t->0.0))
+        @test supports_jacobian(WeakDirichletBoundaryOperator(selector, [1.0], nothing; left=t->0.0))
         @test supports_jacobian(NullOperator())
         @test supports_jacobian(ToyReactionOperator(0.1))
         @test supports_jacobian(SimpleTrappingReactionOperator(1.0, 0.5, 1, 2))

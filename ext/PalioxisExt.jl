@@ -128,6 +128,17 @@ function Flopsy.build_palioxis_trapping_model(;
     n_gas = palioxis_model.n_gas
     n_ne  = palioxis_model.n_ne_species
 
+    # Build trap_groups from the Palioxis occupancy structure.
+    # Each defect type has max_occ[d] fill levels; levels within a type are coupled
+    # (multi-occupancy trapping couples adjacent occupancy states).
+    trap_occupancies = Palioxis.get_max_trap_occupancy(palioxis_model)
+    trap_groups = Vector{Vector{Int}}()
+    pos = 1
+    for occ in trap_occupancies
+        push!(trap_groups, collect(pos:pos + occ - 1))
+        pos += occ
+    end
+
     adaptor = Flopsy.HotgatesTrappingAdaptor(
         collect(1:n_gas),
         collect(n_gas+1 : n_gas+n_ne),
@@ -135,6 +146,7 @@ function Flopsy.build_palioxis_trapping_model(;
         Palioxis.trap_names(palioxis_model),
         Palioxis.defect_names(palioxis_model),
         Matrix{Float64}(defects),
+        trap_groups,
     )
 
     # Diffusion coefficients come from Palioxis at each time step — fully T-dependent.

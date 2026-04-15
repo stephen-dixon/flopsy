@@ -259,6 +259,155 @@ end
 
 
 """
+    check_mass_conservation(result; rtol=1e-3) -> NamedTuple
+
+Verify that total hydrogen is conserved up to the integrated surface flux.
+
+Computes the total hydrogen inventory at each saved time:
+    H(t) = ∑ᵢ ∫₀ᴸ uᵢ(x,t) dx    (sum over all variables, spatial integral)
+
+and the cumulative surface loss via the trapezoidal rule:
+    Φ(t) = ∫₀ᵗ [left_flux(s) + right_flux(s)] ds
+
+Mass balance: H(t) + Φ(t) ≈ H(0) for all saved times.
+
+The surface flux is computed using the mass-conserving formula:
+    left_flux  = D * (U[1]  - g_left(t))  / dx
+    right_flux = D * (U[nx] - g_right(t)) / dx
+where g(t) is the Dirichlet BC value.  For closed systems (Neumann / no boundary
+operator), Φ(t) = 0 and conservation reduces to checking H is constant.
+
+# Returns
+A `NamedTuple` with fields:
+- `conserved`            — `true` if the maximum relative balance error ≤ `rtol`
+- `max_relative_error`   — maximum relative error over all saved times
+- `total_hydrogen`       — `Vector{Float64}` of H(t)
+- `cumulative_flux`      — `Vector{Float64}` of Φ(t)
+- `balance`              — `H(t) + Φ(t)` (should be constant ≈ H(0))
+
+# Notes
+- Trapping models satisfy global mass conservation exactly in continuous time;
+  the numerical residual reflects time-integration and spatial-quadrature errors.
+- Only `WeakDirichletBoundaryOperator` and `OperatorSum` thereof contribute surface
+  flux.  Penalty / mass-matrix / callback / eliminated methods are not yet accounted
+  for (these are rarely combined with mass-conservation diagnostics).
+"""
+function check_mass_conservation(result::SimulationResult; rtol::Real = 1e-3)
+    layout = result.model.layout
+    t      = result.solution.t
+    nt     = length(t)
+
+    # Total hydrogen at each saved time
+    H = zeros(Float64, nt)
+    for name in variable_names(layout)
+        H .+= integrated_variable(result, name)
+    end
+
+    # Compute mass-conserving surface flux (correct Dirichlet formula D*(U[bdy]-g)/dx)
+    fluxes     = _mass_conserving_boundary_fluxes(result)
+    total_flux = zeros(Float64, nt)
+    for (_, fl) in pairs(fluxes)
+        total_flux .+= fl.left .+ fl.right
+    end
+
+    # Cumulative integral via trapezoidal rule
+    cum_flux = zeros(Float64, nt)
+    for k in 2:nt
+        dt          = t[k] - t[k-1]
+        cum_flux[k] = cum_flux[k-1] + 0.5 * dt * (total_flux[k] + total_flux[k-1])
+    end
+
+    H0             = H[1]
+    balance        = H .+ cum_flux          # should equal H0 at all times
+    denom          = max(abs(H0), 1e-30)
+    balance_errors = abs.(balance .- H0) ./ denom
+    max_rel_error  = maximum(balance_errors)
+
+    return (
+        conserved          = max_rel_error ≤ rtol,
+        max_relative_error = max_rel_error,
+        total_hydrogen     = H,
+        cumulative_flux    = cum_flux,
+        balance            = balance,
+    )
+end
+
+
+"""
+    _mass_conserving_boundary_fluxes(result) -> Dict{Symbol, NamedTuple}
+
+Compute boundary fluxes using the mass-conserving formula `D*(U[boundary]-g)/dx`.
+Only `WeakDirichletBoundaryOperator` contributes; Neumann (closed) systems return
+an empty dict (zero flux, H conserved trivially).
+
+This differs from `surface_diffusive_fluxes`, which uses `D*(U[2]-U[1])/dx`
+(interior gradient approximation, suitable for TDS flux plots but not for mass
+balance checks).
+"""
+function _mass_conserving_boundary_fluxes(result::SimulationResult)
+    model  = result.model
+    layout = model.layout
+    nx     = model.context.nx
+    dx     = model.context.mesh.dx
+    ctx    = model.context
+    t_arr  = result.solution.t
+    nt     = length(t_arr)
+    names  = variable_names(layout)
+
+    fluxes = Dict{Symbol, NamedTuple}()
+
+    bcop = model.operators.boundary
+    bcop === nothing && return fluxes
+
+    _accumulate_weak_dirichlet_fluxes!(fluxes, bcop, result, layout, nx, dx, ctx, t_arr, nt, names)
+    return fluxes
+end
+
+
+function _accumulate_weak_dirichlet_fluxes!(fluxes, op::WeakDirichletBoundaryOperator,
+                                              result, layout, nx, dx, ctx, t_arr, nt, names)
+    # Neither side has a BC → nothing to add
+    op.left === nothing && op.right === nothing && return
+
+    vars = op.selector(layout)
+    for ivar in vars
+        fl = get!(fluxes, names[ivar]) do
+            (left = zeros(Float64, nt), right = zeros(Float64, nt))
+        end
+
+        for it in 1:nt
+            t     = t_arr[it]
+            T_val = op.temperature !== nothing ?
+                Float64(temperature_at(op.temperature, ctx, t, 1)) : NaN
+            D = Flopsy._eval_D(op.coefficients, ivar, 1, T_val)
+            U = state_view(result.solution.u[it], layout, nx)
+
+            if op.left !== nothing
+                fl.left[it] += D * (U[ivar, 1] - op.left(t)) / dx
+            end
+            if op.right !== nothing
+                fl.right[it] += D * (U[ivar, nx] - op.right(t)) / dx
+            end
+        end
+    end
+end
+
+# OperatorSum as boundary: recurse into sub-operators
+function _accumulate_weak_dirichlet_fluxes!(fluxes, op::OperatorSum,
+                                              result, layout, nx, dx, ctx, t_arr, nt, names)
+    for sub in op.ops
+        _accumulate_weak_dirichlet_fluxes!(fluxes, sub, result, layout, nx, dx, ctx, t_arr, nt, names)
+    end
+end
+
+# Default: ignore operators that don't contribute a mass-conserving boundary flux
+function _accumulate_weak_dirichlet_fluxes!(fluxes, op::AbstractOperator,
+                                              result, layout, nx, dx, ctx, t_arr, nt, names)
+    return
+end
+
+
+"""
     print_run_banner(config, solver_config, model)
 
 Print a human-readable summary of the simulation setup to stdout.

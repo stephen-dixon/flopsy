@@ -97,13 +97,37 @@ function _build_jac_prototype(model::SystemModel, ops)
 
     entries = Set{Tuple{Int,Int}}()
 
-    for ix in 1:nx
-        offset = (ix - 1) * nvars
-        for iv1 in 1:nvars, iv2 in 1:nvars
-            push!(entries, (offset + iv1, offset + iv2))
+    # --- Per-node diagonal block ---
+    # Collect per-node sparsity from each operator (union).
+    # Fall back to fully dense if any operator returns nothing.
+    node_pattern = Set{Tuple{Int,Int}}()
+    dense_diag   = false
+    for op in ops
+        sp = jacobian_node_sparsity(op, layout)
+        if sp === nothing
+            dense_diag = true
+            break
+        end
+        union!(node_pattern, sp)
+    end
+
+    if dense_diag
+        for ix in 1:nx
+            offset = (ix - 1) * nvars
+            for iv1 in 1:nvars, iv2 in 1:nvars
+                push!(entries, (offset + iv1, offset + iv2))
+            end
+        end
+    else
+        for ix in 1:nx
+            offset = (ix - 1) * nvars
+            for (r, c) in node_pattern
+                push!(entries, (offset + r, offset + c))
+            end
         end
     end
 
+    # --- Off-diagonal entries for inter-node diffusion coupling ---
     for op in ops
         for ivar in diffusion_variable_indices(op, layout)
             for ix in 1:(nx - 1)

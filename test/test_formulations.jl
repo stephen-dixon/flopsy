@@ -144,6 +144,71 @@
     end
 
     # ------------------------------------------------------------------
+    @testset "IMEXReactionFormulation: solve and accuracy" begin
+        # Build problem directly with SimpleTrappingReactionOperator, which has an
+        # analytic Jacobian — exercises the jac1! path in build_problem.
+        nx   = 20
+        mesh = Mesh1D(1e-3, nx)
+        x    = mesh.x
+
+        selector = layout -> variables_with_tag(layout, :diffusion)
+        react    = SimpleTrappingReactionOperator(1e-2, 0.1, 1, 2)
+        diffop   = LinearDiffusionOperator([1e-7, 0.0], selector, nothing)
+        bcop     = WeakDirichletBoundaryOperator(selector, [1e-7, 0.0], nothing;
+                                                  left=t->0.0, right=t->0.0)
+
+        vars   = [VariableInfo(:c, :mobile, Set([:diffusion, :reaction])),
+                  VariableInfo(:theta, :trap,   Set([:reaction]))]
+        layout = VariableLayout(vars)
+        model_rxn = build_rd_model(
+            layout    = layout,
+            mesh      = mesh,
+            diffusion = diffop,
+            reaction  = react,
+            boundary  = bcop,
+        )
+
+        c0 = 0.1 .* exp.(-(x .- x[end]/2).^2 ./ (2*(x[end]/8)^2))
+        u0_rxn = zeros(2 * nx)
+        dU0    = state_view(u0_rxn, layout, nx)
+        for ix in 1:nx; dU0[1, ix] = c0[ix]; end
+
+        config_rxn = SolverConfig(
+            formulation       = IMEXReactionFormulation(),
+            algorithm         = KenCarp4(),
+            abstol            = 1e-10,
+            reltol            = 1e-8,
+            saveat            = saveat,
+            show_progress     = false,
+            show_solver_stats = false,
+        )
+        sol_rxn    = solve_problem(model_rxn, u0_rxn, tspan, config_rxn)
+        result_rxn = wrap_result(model_rxn, sol_rxn, config_rxn)
+
+        @test sol_rxn.retcode == ReturnCode.Success
+        @test length(result_rxn.solution.t) == length(saveat)
+
+        c_rxn = variable_timeseries(result_rxn, :c)
+        @test all(c_rxn .>= -1e-10)
+
+        # Compare against the UnsplitFormulation reference on the same model
+        config_ref2 = SolverConfig(
+            formulation       = UnsplitFormulation(),
+            algorithm         = Rodas5P(),
+            abstol            = 1e-10,
+            reltol            = 1e-8,
+            saveat            = saveat,
+            show_progress     = false,
+            show_solver_stats = false,
+        )
+        sol_ref2 = solve_problem(model_rxn, u0_rxn, tspan, config_ref2)
+        c_ref2   = variable_timeseries(wrap_result(model_rxn, sol_ref2, config_ref2), :c)
+
+        rel_err = maximum(abs.(c_rxn .- c_ref2)) / (maximum(abs.(c_ref2)) + 1e-20)
+        @test rel_err < 1e-2
+    end
+
+    # ------------------------------------------------------------------
     @testset "ResidualFormulation: solve" begin
         model6, u06, tspan6 = make_trapping_problem()
         config_dae = SolverConfig(
@@ -195,4 +260,98 @@
         @test stats isa Dict{String,Any}     # empty is fine, should not throw
     end
 
+end
+
+# ---------------------------------------------------------------------------
+# check_mass_conservation tests
+# ---------------------------------------------------------------------------
+
+@testset "check_mass_conservation" begin
+
+    @testset "closed system (Neumann BCs): total H constant" begin
+        # Simple trapping with zero-flux BCs → no surface loss → H ≈ const.
+        nx   = 20
+        mesh = Mesh1D(1e-3, nx)
+        x    = mesh.x
+        model_c = build_trapping_model(mesh=mesh, k_trap=1e-2, k_detrap=0.1,
+                                       diffusion_coefficient=1e-7)
+        c0   = 0.1 .* exp.(-(x .- x[end]/2).^2 ./ (2*(x[end]/8)^2))
+        u0_c = zeros(2*nx)
+        for ix in 1:nx; u0_c[(ix-1)*2+1] = c0[ix]; end
+
+        config_c = SolverConfig(
+            formulation=UnsplitFormulation(), algorithm=Rodas5P(),
+            abstol=1e-10, reltol=1e-8,
+            saveat=collect(range(0.0, 50.0; length=21)),
+            show_progress=false, show_solver_stats=false,
+        )
+        result_c = wrap_result(model_c, solve_problem(model_c, u0_c, (0.0, 50.0), config_c), config_c)
+
+        mc = check_mass_conservation(result_c; rtol=1e-4)
+        @test mc.conserved
+        # Total H should be nearly constant (no surface loss)
+        @test maximum(abs.(mc.total_hydrogen .- mc.total_hydrogen[1])) /
+              max(abs(mc.total_hydrogen[1]), 1e-30) < 1e-4
+    end
+
+    @testset "open system (Dirichlet BCs): surface flux accounts for loss" begin
+        # Trapping with vacuum Dirichlet BCs → H decreases; flux integral should match.
+        nx = 20
+        mesh = Mesh1D(1e-3, nx)
+        x    = mesh.x
+        D    = 1e-7
+        selector  = layout -> variables_with_tag(layout, :diffusion)
+        react_op  = SimpleTrappingReactionOperator(1e-2, 0.1, 1, 2)
+        diffop_o  = LinearDiffusionOperator([D, 0.0], selector, nothing)
+        bcop_o    = WeakDirichletBoundaryOperator(selector, [D, 0.0], nothing;
+                                                   left=t->0.0, right=t->0.0)
+        vars_o    = [VariableInfo(:c,     :mobile, Set([:diffusion, :reaction])),
+                     VariableInfo(:theta, :trap,   Set([:reaction]))]
+        layout_o  = VariableLayout(vars_o)
+        model_o   = build_rd_model(layout=layout_o, mesh=mesh,
+                                    diffusion=diffop_o, reaction=react_op, boundary=bcop_o)
+
+        u0_o  = zeros(2*nx)
+        dU0_o = state_view(u0_o, layout_o, nx)
+        # Use a profile that satisfies the BCs at t=0 (zero at boundaries).
+        # Use fine saveat (dt=0.01 s) so that the trapezoidal flux integral is
+        # accurate enough for rtol=1e-3; the diffusion time scale here is ~1 s.
+        for ix in 1:nx; dU0_o[1, ix] = 0.05 * sin(π * x[ix] / x[end]); end
+
+        config_o = SolverConfig(
+            formulation=UnsplitFormulation(), algorithm=Rodas5P(),
+            abstol=1e-10, reltol=1e-8,
+            saveat=collect(range(0.0, 5.0; length=501)),
+            show_progress=false, show_solver_stats=false,
+        )
+        result_o = wrap_result(model_o, solve_problem(model_o, u0_o, (0.0, 5.0), config_o), config_o)
+
+        mc = check_mass_conservation(result_o; rtol=1e-3)
+        # H should decrease (matter leaves through surfaces)
+        @test mc.total_hydrogen[end] < mc.total_hydrogen[1]
+        # Mass balance: H(t) + cumulative_flux(t) ≈ H(0)
+        @test mc.conserved
+    end
+
+    @testset "check_mass_conservation return structure" begin
+        nx   = 10
+        mesh = Mesh1D(1e-3, nx)
+        model_s = build_trapping_model(mesh=mesh, k_trap=1e-2, k_detrap=0.1,
+                                       diffusion_coefficient=1e-7)
+        u0_s = zeros(2*nx); u0_s[1] = 0.01
+        config_s2 = SolverConfig(formulation=UnsplitFormulation(), algorithm=Rodas5P(),
+            abstol=1e-10, reltol=1e-8, saveat=[0.0, 5.0, 10.0],
+            show_progress=false, show_solver_stats=false)
+        result_s2 = wrap_result(model_s, solve_problem(model_s, u0_s, (0.0, 10.0), config_s2), config_s2)
+
+        mc = check_mass_conservation(result_s2)
+        @test haskey(mc, :conserved)
+        @test haskey(mc, :max_relative_error)
+        @test haskey(mc, :total_hydrogen)
+        @test haskey(mc, :cumulative_flux)
+        @test haskey(mc, :balance)
+        @test length(mc.total_hydrogen) == 3
+        @test length(mc.cumulative_flux) == 3
+        @test mc.cumulative_flux[1] == 0.0   # cumulative flux starts at zero
+    end
 end

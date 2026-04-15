@@ -37,6 +37,7 @@ step!(u, ::NullOperator, ctx, dt, t) = u
 residual!(res, ::NullOperator, du, u, ctx, t) = res
 jacobian!(J, ::NullOperator, u, ctx, t) = J
 mass_matrix(::NullOperator, ctx) = nothing
+jacobian_node_sparsity(::NullOperator, layout) = Set{Tuple{Int,Int}}()
 
 """
     rhs!(du, op, u, ctx, t) -> du
@@ -91,6 +92,20 @@ end
 Return the mass matrix for operator `op`, or `nothing` if not applicable.
 """
 mass_matrix(op::AbstractOperator, ctx) = nothing
+
+"""
+    jacobian_node_sparsity(op, layout) -> Set{Tuple{Int,Int}} or nothing
+
+Return the per-node Jacobian nonzero pattern as a set of `(row, col)` pairs within
+the `nvars × nvars` block for a single spatial node.  Return `nothing` to signal a
+fully dense block (the safe fallback).
+
+Called by `_build_jac_prototype` to assemble the sparse Jacobian prototype.
+Off-node (inter-node diffusion) entries are handled separately via
+`diffusion_variable_indices` and do not need to be included here.
+Pairs use 1-based variable indices `1..nvariables(layout)`.
+"""
+jacobian_node_sparsity(::AbstractOperator, layout) = nothing
 
 """
     active_operators(model) -> Vector
