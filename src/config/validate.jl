@@ -45,5 +45,9 @@ function validate(cfg::ProblemConfig)
             throw(ArgumentError("Unsupported boundary condition method $(bc.method)"))
     end
 
+    ic_kind = cfg.initial_conditions.kind
+    ic_kind in (:default, :center_pulse, :uniform) ||
+        throw(ArgumentError("Unsupported initial_conditions.kind $(ic_kind). Supported kinds: default, center_pulse, uniform"))
+
     return cfg
 end

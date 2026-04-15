@@ -28,8 +28,7 @@ function instantiate(::HotgatesTrappingTemplate, cfg::ProblemConfig)
 
     u0 = zeros(Float64, nvariables(model.layout) * nx)
     U0 = state_view(u0, model.layout, nx)
-    U0[1, cld(nx, 2)] = _get_parameter(cfg, :initial_mobile_pulse_amplitude, 1.0)
-    U0[2, :] .= _get_parameter(cfg, :initial_trap_occupancy, 0.0)
+    _apply_trapping_ic!(U0, cfg)
 
     return _assemble_problem(cfg, model, u0)
 end

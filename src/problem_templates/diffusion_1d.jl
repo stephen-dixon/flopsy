@@ -26,7 +26,7 @@ function instantiate(::Diffusion1DTemplate, cfg::ProblemConfig)
 
     u0 = zeros(Float64, nvariables(layout) * mesh_nx(mesh))
     U0 = state_view(u0, layout, mesh_nx(mesh))
-    U0[1, cld(mesh_nx(mesh), 2)] = _get_parameter(cfg, :initial_pulse_amplitude, 1.0)
+    _apply_diffusion_ic!(U0, cfg)
 
     return _assemble_problem(cfg, model, u0)
 end

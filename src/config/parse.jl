@@ -21,6 +21,8 @@ function parse_config(raw::AbstractDict)
     mesh = _parse_mesh_config(_required_table(cfg, "mesh"))
     solver = _parse_input_solver_config(_required_table(cfg, "solver"))
     bcs = _parse_boundary_conditions(get(cfg, "boundary_conditions", Any[]))
+    initial_conditions =
+        _parse_initial_conditions(get(cfg, "initial_conditions", Dict{String, Any}()))
     parameters = _parse_parameters(cfg)
 
     return ProblemConfig(
@@ -28,6 +30,7 @@ function parse_config(raw::AbstractDict)
         mesh,
         solver,
         bcs,
+        initial_conditions,
         parameters
     )
 end
@@ -64,6 +67,7 @@ function _normalize_legacy_config(raw::AbstractDict)
         "t0" => tspan_raw[1],
         "tend" => tspan_raw[2]
     )
+    normalized["initial_conditions"] = Dict{String, Any}()
 
     passthrough = (
         "diffusion_coefficient",
@@ -126,6 +130,19 @@ function _parse_boundary_conditions(raw)
     end
     return bcs
 end
+
+function _parse_initial_conditions(raw::AbstractDict)
+    return InitialConditionConfig(
+        Symbol(get(raw, "kind", "default")),
+        _float_or_nothing(get(raw, "amplitude", nothing)),
+        _float_or_nothing(get(raw, "value", nothing)),
+        _float_or_nothing(get(raw, "mobile_amplitude", nothing)),
+        _float_or_nothing(get(raw, "mobile_value", nothing)),
+        _float_or_nothing(get(raw, "trap_occupancy", nothing))
+    )
+end
+
+_float_or_nothing(value) = value === nothing ? nothing : Float64(value)
 
 function _parse_parameters(cfg::AbstractDict)
     raw = get(cfg, "parameters", Dict{String, Any}())

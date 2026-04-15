@@ -114,13 +114,13 @@ function _build_boundary_operator(cfg::ProblemConfig, layout::VariableLayout, co
 
     selector = let bcs = cfg.boundary_conditions
         function (layout_inner::VariableLayout)
-            vars = Int[]
+            vars = Set{Int}()
             for bc in bcs
                 idx = findfirst(==(bc.variable), variable_names(layout_inner))
                 idx === nothing && continue
                 push!(vars, idx)
             end
-            return vars
+            return sort!(collect(vars))
         end
     end
 
@@ -160,4 +160,31 @@ function _build_boundary_method(method::Symbol)
         return EliminatedMethod()
     end
     throw(ArgumentError("Unsupported boundary condition method $(method)"))
+end
+
+function _apply_diffusion_ic!(U0, cfg::ProblemConfig)
+    ic = cfg.initial_conditions
+    nx = size(U0, 2)
+
+    if ic.kind == :uniform
+        U0[1, :] .= something(ic.value, _get_parameter(cfg, :initial_uniform_value, 0.0))
+    else
+        U0[1, cld(nx, 2)] = something(ic.amplitude, _get_parameter(cfg, :initial_pulse_amplitude, 1.0))
+    end
+
+    return U0
+end
+
+function _apply_trapping_ic!(U0, cfg::ProblemConfig)
+    ic = cfg.initial_conditions
+    nx = size(U0, 2)
+    U0[2, :] .= something(ic.trap_occupancy, _get_parameter(cfg, :initial_trap_occupancy, 0.0))
+
+    if ic.kind == :uniform
+        U0[1, :] .= something(ic.mobile_value, _get_parameter(cfg, :initial_mobile_uniform_value, 0.0))
+    else
+        U0[1, cld(nx, 2)] = something(ic.mobile_amplitude, _get_parameter(cfg, :initial_mobile_pulse_amplitude, 1.0))
+    end
+
+    return U0
 end

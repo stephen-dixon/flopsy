@@ -1,0 +1,88 @@
+# Full featured example for the config-driven problem layer.
+#
+# Supported built-in problem types:
+#   - "diffusion_1d"
+#   - "trapping_1d"
+#   - "hotgates_trapping"
+problem_type = "trapping_1d"
+
+[mesh]
+# Supported mesh kinds today:
+#   - "uniform_1d"
+#
+# Future mesh kinds would be added here, but the current parser/validator only
+# accepts "uniform_1d".
+kind = "uniform_1d"
+nx = 101
+xmin = 0.0
+xmax = 1.0
+
+[solver]
+# Supported formulations:
+#   - "unsplit"        : monolithic ODE solve
+#   - "imex"           : diffusion/boundary implicit, reaction explicit
+#   - "imex_reaction"  : reaction implicit, diffusion/boundary explicit
+#   - "split"          : operator splitting (requires dt)
+#   - "residual"       : DAE-style residual formulation
+formulation = "unsplit"
+
+# Common algorithm choices:
+#   - "Rodas5"
+#   - "Rodas5P"
+#   - "KenCarp4"
+#   - "CVODE_BDF"
+algorithm = "Rodas5"
+abstol = 1e-8
+reltol = 1e-6
+saveat = [0.0, 0.25, 0.5, 0.75, 1.0]
+
+# Required only for formulation = "split".
+# dt = 0.05
+
+[parameters]
+t0 = 0.0
+tend = 1.0
+k_trap = 5.0
+k_detrap = 0.5
+diffusion_coefficient = 0.01
+
+[initial_conditions]
+# Supported IC kinds:
+#   - "default"       : use the template defaults / legacy parameter names
+#   - "center_pulse"  : place mobile inventory in the center cell
+#   - "uniform"       : initialise the mobile field everywhere
+kind = "uniform"
+
+# For kind = "uniform" on trapping / hotgates templates:
+mobile_value = 0.05
+trap_occupancy = 0.10
+
+# Alternative keys for kind = "center_pulse":
+# mobile_amplitude = 1.0
+#
+# For diffusion_1d:
+# value = 0.05        # uniform
+# amplitude = 1.0     # center_pulse
+
+[[boundary_conditions]]
+# Supported BC kinds today:
+#   - "dirichlet"
+#
+# Supported enforcement methods:
+#   - "weak"
+#   - "penalty"
+#   - "mass_matrix"
+#   - "callback"
+#   - "eliminated"
+variable = "c"
+side = "left"
+kind = "dirichlet"
+method = "weak"
+value = 0.0
+
+[[boundary_conditions]]
+variable = "c"
+side = "right"
+kind = "dirichlet"
+method = "weak"
+value = 0.0

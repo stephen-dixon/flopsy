@@ -28,6 +28,7 @@
             MeshConfig(:uniform_1d, 11, 0.0, 1.0),
             InputSolverConfig(:split, :Rodas5, nothing, 1e-8, 1e-6, [0.0, 1.0]),
             BoundaryConditionConfig{Float64}[],
+            Flopsy.InitialConditionConfig(:default, nothing, nothing, nothing, nothing, nothing),
             (; t0 = 0.0, tend = 1.0, diffusion_coefficient = 0.1)
         )
 
@@ -40,6 +41,7 @@
             MeshConfig(:uniform_1d, 17, 0.0, 1.0),
             InputSolverConfig(:unsplit, :Rodas5, nothing, 1e-8, 1e-6, [0.0, 0.1]),
             BoundaryConditionConfig{Float64}[],
+            Flopsy.InitialConditionConfig(:center_pulse, nothing, nothing, 1.0, nothing, 0.0),
             (; t0 = 0.0, tend = 0.1, k_trap = 2.0, k_detrap = 0.25,
                 diffusion_coefficient = 0.05, initial_mobile_pulse_amplitude = 1.0,
                 initial_trap_occupancy = 0.0)
@@ -58,5 +60,13 @@
         @test cfg.problem_type === :trapping_1d
         @test cfg.mesh.kind === :uniform_1d
         @test cfg.solver.formulation === :unsplit
+    end
+
+    @testset "commented example with BC and IC loads and solves" begin
+        cfg = load_config(joinpath(@__DIR__, "..", "examples", "trapping_1d_with_bc_ic.toml"))
+        @test cfg.initial_conditions.kind === :uniform
+        @test length(cfg.boundary_conditions) == 2
+        result = solve(build_problem(cfg))
+        @test result.solution.t == [0.0, 0.25, 0.5, 0.75, 1.0]
     end
 end
