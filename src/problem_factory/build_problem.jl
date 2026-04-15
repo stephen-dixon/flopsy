@@ -1,9 +1,14 @@
 """
     build_problem(cfg::ProblemConfig) -> SimulationProblem
 
-Build a fully assembled `SimulationProblem` from a typed configuration.
+Deprecated legacy entry point. Build a fully assembled `SimulationProblem`
+from a typed configuration.
 """
 function build_problem(cfg::ProblemConfig)
+    Base.depwarn(
+        "`build_problem(::ProblemConfig)` is deprecated. Prefer the registry-driven path: `parse_input_deck` -> `build_context` -> `build_simulation`.",
+        :build_problem,
+    )
     validate(cfg)
     template = _select_problem_template(cfg.problem_type)
     return instantiate(template, cfg)
@@ -106,6 +111,10 @@ function run_simulation(config_path::AbstractString)
     if haskey(raw, "problem")
         return run_input_deck(config_path)
     end
+    Base.depwarn(
+        "`run_simulation(path)` on legacy typed configs is deprecated. The supported TOML workflow is the registry-driven input-deck system.",
+        :run_simulation,
+    )
     cfg = load_config(config_path)
     problem = build_problem(cfg)
     return solve(problem)

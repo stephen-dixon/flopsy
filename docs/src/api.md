@@ -1,8 +1,10 @@
 # API Reference
 
-Auto-generated from docstrings.  All symbols listed here are exported from `Flopsy`.
+Auto-generated from docstrings.
 
-## Core abstract types
+## Stable Public API
+
+### Core abstract types
 
 ```@docs
 AbstractSystemModel
@@ -13,7 +15,7 @@ AbstractConstraintOperator
 AbstractFormulation
 ```
 
-## Variable layout
+### Variable layout
 
 ```@docs
 VariableInfo
@@ -25,37 +27,50 @@ variables_in_group
 variables_with_tag
 ```
 
-## Mesh
+### Mesh and system model
 
 ```@docs
 Mesh1D
-```
-
-## System model
-
-```@docs
 SystemContext
 SystemModel
 SimulationProblem
+SolverConfig
 ```
 
-## Config layer
+### Registry-driven input deck
 
 ```@docs
-MeshConfig
-BoundaryConditionConfig
-InputSolverConfig
-InitialConditionConfig
-ProblemConfig
-load_config
-parse_config
-validate
-build_problem(::ProblemConfig)
-solve(::SimulationProblem)
-run_simulation
+ParameterSpec
+SyntaxSpec
+SyntaxRegistry
+BuildContext
+ConfigBlock
+InputDeck
+BackendDefinition
+ICDefinition
+BCDefinition
+OutputDefinition
+ProblemDefinition
+ConfiguredSimulation
+parse_input_deck
+build_registry
+register_syntax!
+lookup_syntax
+syntax_list
+syntax_show
+build_context
+build_simulation
+validate_input_deck
+run_input_deck
+register_plugin_provider!
+plugin_list
+plugin_register!
+plugin_remove!
+cli_main
+julia_main
 ```
 
-## State vector helpers
+### State vector helpers
 
 ```@docs
 state_view
@@ -64,7 +79,7 @@ variable_view
 group_view
 ```
 
-## Temperature providers
+### Temperature providers
 
 ```@docs
 AbstractTemperatureProvider
@@ -74,7 +89,7 @@ FunctionTemperature
 temperature_at
 ```
 
-## Diffusion coefficients
+### Diffusion coefficients
 
 ```@docs
 AbstractDiffusionCoefficients
@@ -84,7 +99,7 @@ ArrheniusDiffusion
 CallableDiffusion
 ```
 
-## Operators
+### Operators
 
 ```@docs
 NullOperator
@@ -115,7 +130,7 @@ jacobian!
 mass_matrix
 ```
 
-## Formulations
+### Formulations
 
 ```@docs
 UnsplitFormulation
@@ -127,18 +142,12 @@ SplitFormulation
 ResidualFormulation
 ```
 
-## Model builders
+### Model builders and solver core
 
 ```@docs
 build_rd_model
 build_trapping_model
 trapping_variable_layout
-```
-
-## Solver core
-
-```@docs
-SolverConfig
 SplitProblem
 SplitSolution
 build_problem(::SystemModel, Any, Any, ::UnsplitFormulation, ::SolverConfig)
@@ -147,9 +156,11 @@ build_problem(::SystemModel, Any, Any, ::IMEXReactionFormulation, ::SolverConfig
 build_problem(::SystemModel, Any, Any, ::SplitFormulation, ::SolverConfig)
 build_problem(::SystemModel, Any, Any, ::ResidualFormulation, ::SolverConfig)
 solve_problem
+solve(::SimulationProblem)
+run_simulation
 ```
 
-## Hotgates adapter
+### Hotgates adapter
 
 ```@docs
 HotgatesTrappingAdaptor
@@ -163,17 +174,7 @@ FakeHotgatesModel
 hotgates_rates!
 ```
 
-## Plotting
-
-```@docs
-plot_tds_flux
-plot_spatial_snapshot
-plot_spatial_evolution
-record_spatial_video
-record_spatial_animation
-```
-
-## Output
+### Output and plotting
 
 ```@docs
 SimulationResult
@@ -190,4 +191,25 @@ write_summary_csv
 load_ic_from_hdf5
 print_run_banner
 solver_stats_dict
+plot_tds_flux
+plot_spatial_snapshot
+plot_spatial_evolution
+record_spatial_video
+record_spatial_animation
+```
+
+## Deprecated Legacy API
+
+These symbols still exist for compatibility but are deprecated and are no longer part of the recommended TOML workflow:
+
+```@docs
+Flopsy.MeshConfig
+Flopsy.BoundaryConditionConfig
+Flopsy.InputSolverConfig
+Flopsy.InitialConditionConfig
+Flopsy.ProblemConfig
+Flopsy.load_config
+Flopsy.parse_config
+Flopsy.validate
+Flopsy.build_problem(::Flopsy.ProblemConfig)
 ```

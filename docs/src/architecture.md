@@ -319,15 +319,16 @@ result = wrap_result(model, sol, config)
 `solve_problem` calls `build_problem`, which dispatches on the formulation to construct
 the `ODEProblem` (with sparse Jacobian if available), then calls `SciMLBase.solve`.
 
-## Config Layer Boundary
+## Input-Deck Boundary
 
-The core architecture above is intentionally separate from the config-driven problem
-layer:
+The numerical core is intentionally separate from the registry-driven input-deck layer:
 
-- `load_config(path)` parses TOML into typed config structs
-- `validate(cfg)` checks the config before solver construction
-- `build_problem(cfg::ProblemConfig)` assembles a `SimulationProblem`
-- `solve(problem::SimulationProblem)` executes the core solve path
+- `parse_input_deck(path)` reads the TOML file into named blocks
+- `build_registry()` constructs the live syntax registry from built-ins and plugins
+- `build_context(deck)` validates block schemas and builds named runtime objects
+- `build_simulation(ctx)` resolves references and assembles a `SimulationProblem`
+- `solve(plan)` executes the standard solve path
 
-This keeps the solver framework extensible for direct Julia use while still supporting
-input-deck workflows for built-in problem templates.
+This keeps the solver framework extensible for direct Julia use while also supporting a strict, plugin-extensible CLI/input-deck workflow.
+
+The old typed config path still exists only as a deprecated compatibility layer and is no longer the primary architecture described by the docs.

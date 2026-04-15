@@ -13,10 +13,10 @@ function register_flopsy_plugin!(registry::Flopsy.SyntaxRegistry)
         :backend,
         :palioxis_trapping,
         [
-            Flopsy.ParameterSpec(:type, true, nothing, "Syntax type"),
-            Flopsy.ParameterSpec(:xml_file, true, nothing, "Palioxis XML model file"),
-            Flopsy.ParameterSpec(:palioxis_root, false, "", "Optional Palioxis root for init"),
-            Flopsy.ParameterSpec(:defect_density, false, 1e-3, "Uniform defect density"),
+            Flopsy.ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+            Flopsy.ParameterSpec(:xml_file, true, nothing, "Palioxis XML model file"; kind = :string),
+            Flopsy.ParameterSpec(:palioxis_root, false, "", "Optional Palioxis root for init"; kind = :string),
+            Flopsy.ParameterSpec(:defect_density, false, 1e-3, "Uniform defect density"; kind = :real),
         ],
         "Palioxis-backed trapping backend registered by the Palioxis extension.",
         (data, ctx, reg, block) -> nothing,
@@ -80,18 +80,18 @@ function register_flopsy_plugin!(registry::Flopsy.SyntaxRegistry)
         :ic,
         :palioxis_equilibrium,
         [
-            Flopsy.ParameterSpec(:type, true, nothing, "Syntax type"),
-            Flopsy.ParameterSpec(:backend, true, nothing, "Referenced backend"),
-            Flopsy.ParameterSpec(:driving_quantity, true, nothing, "Currently supports H_total"),
-            Flopsy.ParameterSpec(:value, true, nothing, "Driving value"),
-            Flopsy.ParameterSpec(:temperature, true, nothing, "Equilibrium temperature"),
+            Flopsy.ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+            Flopsy.ParameterSpec(:backend, true, nothing, "Referenced backend"; kind = :string),
+            Flopsy.ParameterSpec(:driving_quantity, true, nothing, "Currently supports H_total"; kind = :string, allowed_values = ["H_total"]),
+            Flopsy.ParameterSpec(:value, true, nothing, "Driving value"; kind = :real),
+            Flopsy.ParameterSpec(:temperature, true, nothing, "Equilibrium temperature"; kind = :real),
         ],
         "Palioxis equilibrium initial condition registered by the Palioxis extension.",
         (data, ctx, reg, block) -> begin
             Symbol(data["backend"]) in keys(ctx.backends) ||
-                throw(ArgumentError("Block [ic.$(block.name)] references unknown backend $(data["backend"])"))
-            String(data["driving_quantity"]) == "H_total" ||
-                throw(ArgumentError("palioxis_equilibrium currently supports driving_quantity = \"H_total\" only"))
+                throw(Flopsy.ConfigValidationError(
+                    "Block [ic.$(block.name)] field `backend` references unknown backend `$(data["backend"])`",
+                ))
         end,
         (data, ctx, reg, block) -> begin
             backend = ctx.backends[Symbol(data["backend"])]

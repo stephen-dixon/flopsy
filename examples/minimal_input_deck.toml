@@ -1,0 +1,29 @@
+[mesh.main]
+type = "uniform_1d"
+xmin = 0.0
+xmax = 1.0
+nx = 51
+
+[backend.main]
+type = "diffusion_1d"
+diffusion_coefficient = 0.05
+reaction_rate = 0.0
+
+[ic.fill]
+type = "uniform_species"
+species = "u"
+value = 1.0
+
+[output.fields]
+type = "hdf5"
+file = "minimal_fields.h5"
+xdmf = true
+
+[problem.run]
+type = "simulation"
+mesh = "main"
+backend = "main"
+ics = ["fill"]
+outputs = ["fields"]
+tspan = [0.0, 0.25]
+saveat = [0.0, 0.125, 0.25]

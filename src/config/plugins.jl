@@ -48,6 +48,11 @@ function _write_plugin_state(state::Dict{String, Any})
     end
 end
 
+"""
+    plugin_list()
+
+List runtime plugins known to the managed Flopsy plugin environment.
+"""
 function plugin_list()
     state = _read_plugin_state()
     plugins = get(state, "plugins", Dict{String, Any}())
@@ -64,7 +69,14 @@ function plugin_list()
     return out
 end
 
+"""
+    plugin_register!(name; registry = nothing, url = nothing, path = nothing)
+
+Register and install a runtime plugin into the managed Flopsy plugin environment.
+"""
 function plugin_register!(name::AbstractString; registry = nothing, url = nothing, path = nothing)
+    path !== nothing && !isdir(path) &&
+        throw(ArgumentError("Plugin path does not exist or is not a directory: $(path)"))
     _with_plugin_env() do _
         registry !== nothing && Pkg.Registry.add(Pkg.RegistrySpec(url = registry); io = devnull)
         if path !== nothing
@@ -89,6 +101,11 @@ function plugin_register!(name::AbstractString; registry = nothing, url = nothin
     return name
 end
 
+"""
+    plugin_remove!(name)
+
+Remove a runtime plugin from the managed Flopsy plugin environment.
+"""
 function plugin_remove!(name::AbstractString)
     _with_plugin_env() do _
         Pkg.rm(Pkg.PackageSpec(name = String(name)); io = devnull)
@@ -116,10 +133,12 @@ function load_runtime_plugins!(registry::SyntaxRegistry)
             mod = _import_runtime_plugin(name)
             if isdefined(mod, :register_flopsy_plugin!)
                 getfield(mod, :register_flopsy_plugin!)(registry)
+            else
+                throw(ConfigValidationError("Plugin `$name` does not define `register_flopsy_plugin!(registry)`"))
             end
             info["load_error"] = ""
         catch err
-            info["load_error"] = sprint(showerror, err)
+            info["load_error"] = "plugin `$name` failed to load: " * sprint(showerror, err)
             dirty = true
         end
     end

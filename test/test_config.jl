@@ -12,9 +12,9 @@
             "algorithm" => "Rodas5"
         )
 
-        cfg = parse_config(raw)
+        cfg = Flopsy.parse_config(raw)
 
-        @test cfg isa ProblemConfig
+        @test cfg isa Flopsy.ProblemConfig
         @test cfg.problem_type === :trapping_1d
         @test cfg.mesh.nx == 21
         @test cfg.solver.algorithm === :Rodas5
@@ -23,24 +23,24 @@
     end
 
     @testset "validation fails early on bad split config" begin
-        cfg = ProblemConfig(
+        cfg = Flopsy.ProblemConfig(
             :diffusion_1d,
-            MeshConfig(:uniform_1d, 11, 0.0, 1.0),
-            InputSolverConfig(:split, :Rodas5, nothing, 1e-8, 1e-6, [0.0, 1.0]),
-            BoundaryConditionConfig{Float64}[],
+            Flopsy.MeshConfig(:uniform_1d, 11, 0.0, 1.0),
+            Flopsy.InputSolverConfig(:split, :Rodas5, nothing, 1e-8, 1e-6, [0.0, 1.0]),
+            Flopsy.BoundaryConditionConfig{Float64}[],
             Flopsy.InitialConditionConfig(:default, nothing, nothing, nothing, nothing, nothing),
             (; t0 = 0.0, tend = 1.0, diffusion_coefficient = 0.1)
         )
 
-        @test_throws ArgumentError validate(cfg)
+        @test_throws ArgumentError Flopsy.validate(cfg)
     end
 
     @testset "problem factory builds executable trapping problem" begin
-        cfg = ProblemConfig(
+        cfg = Flopsy.ProblemConfig(
             :trapping_1d,
-            MeshConfig(:uniform_1d, 17, 0.0, 1.0),
-            InputSolverConfig(:unsplit, :Rodas5, nothing, 1e-8, 1e-6, [0.0, 0.1]),
-            BoundaryConditionConfig{Float64}[],
+            Flopsy.MeshConfig(:uniform_1d, 17, 0.0, 1.0),
+            Flopsy.InputSolverConfig(:unsplit, :Rodas5, nothing, 1e-8, 1e-6, [0.0, 0.1]),
+            Flopsy.BoundaryConditionConfig{Float64}[],
             Flopsy.InitialConditionConfig(:center_pulse, nothing, nothing, 1.0, nothing, 0.0),
             (; t0 = 0.0, tend = 0.1, k_trap = 2.0, k_detrap = 0.25,
                 diffusion_coefficient = 0.05, initial_mobile_pulse_amplitude = 1.0,
@@ -56,7 +56,7 @@
     end
 
     @testset "load_config reads typed TOML deck" begin
-        cfg = load_config(joinpath(@__DIR__, "..", "examples", "trapping_1d.toml"))
+        cfg = Flopsy.load_config(joinpath(@__DIR__, "..", "examples", "trapping_1d.toml"))
         @test cfg.problem_type === :trapping_1d
         @test cfg.mesh.kind === :uniform_1d
         @test cfg.solver.formulation === :unsplit

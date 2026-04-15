@@ -37,7 +37,8 @@ using OrdinaryDiffEq
 # 1.  Palioxis model
 # ---------------------------------------------------------------------------
 
-Palioxis.init(get(ENV, "PALIOXIS_ROOT", "/Users/sdixon/src/palioxis-tds/Palioxis"))
+const PALIOXIS_ROOT = get(ENV, "PALIOXIS_ROOT", "")
+isempty(PALIOXIS_ROOT) || Palioxis.init(PALIOXIS_ROOT)
 const XML_FILE = get(ENV, "PALIOXIS_XML", "traps.xml")
 
 pal = MultipleDefectModel(XML_FILE)

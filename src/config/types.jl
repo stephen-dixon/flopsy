@@ -1,7 +1,7 @@
 """
     MeshConfig
 
-Typed mesh specification for the config-driven problem layer.
+Legacy typed mesh specification for the deprecated config-driven problem layer.
 """
 struct MeshConfig{T}
     kind::Symbol
@@ -13,7 +13,8 @@ end
 """
     BoundaryConditionConfig
 
-Typed boundary-condition specification used by the config layer.
+Legacy typed boundary-condition specification used by the deprecated config
+layer.
 """
 struct BoundaryConditionConfig{T}
     variable::Symbol
@@ -26,8 +27,8 @@ end
 """
     InputSolverConfig
 
-Typed solver settings parsed from TOML before they are lowered into the core
-`SolverConfig`.
+Legacy typed solver settings parsed from TOML before they are lowered into the
+core `SolverConfig`.
 """
 struct InputSolverConfig{A, T, S}
     formulation::Symbol
@@ -41,7 +42,8 @@ end
 """
     InitialConditionConfig
 
-Typed initial-condition specification used by the factory-built problem layer.
+Legacy typed initial-condition specification used by the deprecated factory
+built problem layer.
 """
 struct InitialConditionConfig{T}
     kind::Symbol
@@ -82,7 +84,8 @@ end
 """
     ProblemConfig
 
-Typed top-level problem configuration used by the factory-built problem layer.
+Legacy typed top-level problem configuration used by the deprecated factory
+built problem layer.
 """
 struct ProblemConfig{M, S, BC, IC, P}
     problem_type::Symbol

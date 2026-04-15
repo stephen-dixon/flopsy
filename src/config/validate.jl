@@ -1,10 +1,14 @@
 """
     validate(cfg::ProblemConfig) -> ProblemConfig
 
-Validate a parsed configuration and throw user-facing errors before solver
-construction.
+Deprecated legacy entry point. Validate a parsed typed configuration before
+solver construction.
 """
 function validate(cfg::ProblemConfig)
+    Base.depwarn(
+        "`validate(::ProblemConfig)` is deprecated. The supported TOML validation path is `validate_input_deck` on registry-driven input decks.",
+        :validate,
+    )
     cfg.mesh.kind == :uniform_1d ||
         throw(ArgumentError("Only mesh.kind = \"uniform_1d\" is currently supported"))
     cfg.mesh.nx >= 2 || throw(ArgumentError("mesh.nx must be at least 2"))

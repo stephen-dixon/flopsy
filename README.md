@@ -2,70 +2,120 @@
 
 ![Logo](./docs/flopsy.png)
 
-Flopsy is a Julia package for stiff 1D reaction-diffusion simulations with two user paths:
+Flopsy is a Julia package for stiff 1D reaction-diffusion simulations.
 
-- a programmable core API for building models directly in Julia
-- a registry-driven TOML layer and `flopsy` CLI for supported input-deck workflows
+It supports two primary use cases:
 
-The config path is a thin wrapper over the same solver stack. It does not define a second execution architecture.
+- running registry-driven TOML input decks through the CLI
+- using the package directly as a Julia library/framework
 
-## Design
+The old typed TOML/config path still exists only as a deprecated compatibility layer. The supported TOML workflow is the registry-driven input-deck system built from named blocks and registered syntax.
 
-Flopsy now builds input decks through a registered syntax system inspired by MOOSE.
-Built-ins and plugins register syntax entries into the same in-memory registry, keyed by fixed domain and type pairs such as:
+## Installation and Development
 
-- `(:mesh, :uniform_1d)`
-- `(:backend, :trapping_1d)`
-- `(:ic, :uniform_species)`
-- `(:ic, :palioxis_equilibrium)`
-- `(:bc, :dirichlet)`
-- `(:output, :hdf5)`
-- `(:problem, :simulation)`
+Clone the repository and instantiate the environment:
 
-The top-level TOML structure is fixed:
+```bash
+julia --project=. -e 'using Pkg; Pkg.instantiate()'
+```
 
-- `[mesh.<name>]`
-- `[backend.<name>]`
-- `[ic.<name>]`
-- `[bc.<name>]`
-- `[output.<name>]`
-- `[problem.<name>]`
+For source-based CLI use, run:
 
-Backends own the species/state layout. Users do not declare `[variables]` blocks yet. Initial conditions and explicit boundary conditions must target backend-declared species by name.
+```bash
+julia --project=. scripts/flopsy.jl --help
+```
 
-## Quickstart
+## Quick Start: CLI
 
-### Programmatic core
+The canonical input-deck format is the registry-driven named-block TOML model.
+
+Minimal example: [`examples/minimal_input_deck.toml`](examples/minimal_input_deck.toml)
+
+Validate it:
+
+```bash
+julia --project=. scripts/flopsy.jl validate examples/minimal_input_deck.toml
+```
+
+Run it:
+
+```bash
+julia --project=. scripts/flopsy.jl run examples/minimal_input_deck.toml
+```
+
+List available built-in and plugin-provided syntax:
+
+```bash
+julia --project=. scripts/flopsy.jl syntax list
+```
+
+Show one syntax entry and its schema:
+
+```bash
+julia --project=. scripts/flopsy.jl syntax show bc dirichlet
+```
+
+For a more complete deck with BC/IC/output wiring, see [`examples/trapping_1d_with_bc_ic.toml`](examples/trapping_1d_with_bc_ic.toml).
+
+## Quick Start: Julia Library
+
+### Run an input deck from Julia
+
+```julia
+using Flopsy
+
+ctx = validate_input_deck("examples/minimal_input_deck.toml")
+result = run_input_deck("examples/minimal_input_deck.toml")
+```
+
+Equivalent runnable example: [`examples/run_input_deck_from_julia.jl`](examples/run_input_deck_from_julia.jl)
+
+### Build and solve directly from Julia
 
 ```julia
 using Flopsy
 using OrdinaryDiffEq
 
-mesh = Mesh1D(1e-3, 60)
+mesh = Mesh1D(1.0, 51)
 model = build_trapping_model(
     mesh = mesh,
-    k_trap = 5e-3,
-    k_detrap = 0.05,
-    diffusion_coefficient = 1e-7,
+    k_trap = 2.0,
+    k_detrap = 0.25,
+    diffusion_coefficient = 0.05,
 )
 
 u0 = zeros(nvariables(model.layout) * length(mesh.x))
-tspan = (0.0, 200.0)
+tspan = (0.0, 0.25)
 
 config = SolverConfig(
     formulation = UnsplitFormulation(),
     algorithm = Rodas5P(),
-    abstol = 1e-9,
-    reltol = 1e-7,
-    saveat = collect(0.0:2.0:200.0),
+    abstol = 1e-8,
+    reltol = 1e-6,
+    saveat = [0.0, 0.125, 0.25],
 )
 
 result = wrap_result(model, solve_problem(model, u0, tspan, config), config)
-write_field_output_hdf5(result, "fields.h5")
-write_xdmf_for_flopsy_h5("fields.h5")
 ```
 
-### Registry-driven TOML
+Equivalent runnable example: [`examples/programmatic_trapping.jl`](examples/programmatic_trapping.jl)
+
+Use the CLI when you want a stable declarative workflow, validation, and plugin-driven syntax discovery. Use the Julia API when you want programmatic model assembly, custom orchestration, or lower-level extension hooks.
+
+## Input Deck Overview
+
+Supported top-level TOML domains are fixed:
+
+- `mesh`
+- `backend`
+- `ic`
+- `bc`
+- `output`
+- `problem`
+
+Each named block declares a registered `type`. Built-ins and plugins both register syntax through the same `SyntaxRegistry`.
+
+Example:
 
 ```toml
 [mesh.main]
@@ -85,116 +135,70 @@ type = "uniform_species"
 species = "H_mobile"
 value = 1e-3
 
-[bc.left_H]
-type = "dirichlet"
-species = "H_mobile"
-boundary = "left"
-value = 0.0
-
 [output.fields]
 type = "hdf5"
 file = "trapping_fields.h5"
 xdmf = true
 
 [problem.run]
-type = "trapping_1d"
+type = "simulation"
 mesh = "main"
 backend = "main"
 ics = ["mobile"]
-bcs = ["left_H"]
 outputs = ["fields"]
 tspan = [0.0, 1.0]
-saveat = [0.0, 0.25, 0.5, 0.75, 1.0]
+saveat = [0.0, 0.5, 1.0]
 ```
 
-Run it with:
+Validation is schema-driven:
+
+- unknown keys are rejected by default
+- required fields are enforced centrally
+- field types and enum-like values are checked before builders run
+- object and species reference failures are surfaced with named diagnostics
+
+## Plugins and Extensibility
+
+Plugins extend the same syntax registry used by built-ins. A plugin package registers syntax by defining:
+
+```julia
+register_flopsy_plugin!(registry)
+```
+
+Users can manage runtime plugins through the CLI:
 
 ```bash
-julia --project=. scripts/run_from_toml.jl examples/trapping_1d_with_bc_ic.toml
+julia --project=. scripts/flopsy.jl plugin list
+julia --project=. scripts/flopsy.jl plugin register MyPlugin --path /path/to/MyPlugin
+julia --project=. scripts/flopsy.jl plugin remove MyPlugin
 ```
 
-or via the CLI entrypoint:
+Built-in syntax and plugin syntax coexist in one live registry, so `syntax list` and `syntax show` reflect both.
+
+## Standalone CLI Compilation
+
+The CLI is usable from source and also prepared for PackageCompiler app builds.
+
+App wrapper package: [`app/FlopsyCLI`](app/FlopsyCLI)
+
+Build script:
 
 ```bash
-flopsy run examples/trapping_1d_with_bc_ic.toml
+julia --project=. scripts/build_app.jl
 ```
 
-## Boundary conditions and initial conditions
+This uses `PackageCompiler.create_app` to build a standalone executable named `flopsy` under `build/flopsy-app`.
 
-Current TOML BC support is intentionally narrow:
+## Legacy Configuration API
 
-- explicit BC syntax currently supports `dirichlet`
-- if no `[bc.*]` blocks are provided, diffusion uses the default closed zero-flux Neumann behaviour
+The following typed-config APIs are deprecated and are no longer the recommended TOML workflow:
 
-Examples:
+- `load_config`
+- `parse_config`
+- `validate(::ProblemConfig)`
+- `build_problem(::ProblemConfig)`
 
-- [examples/trapping_1d_with_bc_ic.toml](/Users/sdixon/src/palioxis-tds/flopsy/examples/trapping_1d_with_bc_ic.toml)
-- [examples/closed_system_no_bc.toml](/Users/sdixon/src/palioxis-tds/flopsy/examples/closed_system_no_bc.toml)
-
-ICs come in two categories:
-
-- species-targeted ICs such as `uniform_species`
-- backend-derived ICs such as `palioxis_equilibrium`
-
-Overlapping IC assignments are rejected by default.
-
-## CLI
-
-The CLI is designed to work from source and as a PackageCompiler target.
-
-```text
-flopsy run <input.toml>
-flopsy validate <input.toml>
-flopsy syntax list
-flopsy syntax show <domain> <type>
-flopsy plugin list
-flopsy plugin register <name> --registry <url>
-flopsy plugin register <name> --url <pkg-url>
-flopsy plugin register <name> --path <local-path>
-flopsy plugin remove <name>
-flopsy xdmf <fields.h5> [--output out.xdmf]
-```
-
-`validate` parses and builds the named objects without running the solver. `syntax list` and `syntax show` are generated from the live registry, so built-ins and loaded plugins appear through the same interface.
-
-## Plugins
-
-Flopsy supports runtime-installed plugins through a managed Julia environment under the user config area. The compiled CLI does not mutate or rebuild itself when plugins are installed.
-
-At startup Flopsy:
-
-- builds the built-in syntax registry
-- activates and inspects the managed plugin environment
-- loads plugin packages
-- lets each plugin call `register_flopsy_plugin!(registry)`
-
-Palioxis still lives in this repository today through `ext/PalioxisExt.jl`, but it is wired through the same registration model as a plugin.
-
-## XDMF and ParaView
-
-HDF5 field outputs can request an XDMF companion directly:
-
-```toml
-[output.fields]
-type = "hdf5"
-file = "fields.h5"
-xdmf = true
-```
-
-You can also generate one afterwards:
-
-```bash
-flopsy xdmf fields.h5
-```
-
-This writes a `.xdmf` file that points ParaView at the HDF5 field datasets.
-
-## Current limitations
-
-- explicit TOML BC syntax is `dirichlet` only
-- omitted BC blocks are the supported path for closed zero-flux boundaries
-- `biased_1d` mesh syntax is registered, but nonuniform numerics are not implemented yet and it errors explicitly
-- the old typed `load_config` and `build_problem(::ProblemConfig)` path still exists for compatibility, but the registry-driven path is now the primary public interface
+They remain temporarily for compatibility, but new TOML-facing features should go through the registry/input-deck path instead.
 
 ## Documentation
 
@@ -204,10 +208,11 @@ Build the docs with:
 julia --project=docs docs/make.jl
 ```
 
-Key pages:
+Start with:
 
-- [Configuration](docs/src/configuration.md)
-- [Architecture](docs/src/architecture.md)
-- [Hotgates Interface](docs/src/hotgates.md)
-- [HDF5 Output](docs/src/hdf5.md)
-- [API Reference](docs/src/api.md)
+- [`docs/src/index.md`](docs/src/index.md)
+- [`docs/src/cli.md`](docs/src/cli.md)
+- [`docs/src/julia_library.md`](docs/src/julia_library.md)
+- [`docs/src/input_deck.md`](docs/src/input_deck.md)
+- [`docs/src/plugins.md`](docs/src/plugins.md)
+- [`docs/src/standalone_compilation.md`](docs/src/standalone_compilation.md)

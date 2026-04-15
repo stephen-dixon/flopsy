@@ -1,4 +1,11 @@
 @testset "Registry and CLI" begin
+    _error_message(f) = try
+        f()
+        nothing
+    catch err
+        sprint(showerror, err)
+    end
+
     @testset "built-in syntax is registered through the registry" begin
         registry = build_registry()
         mesh_spec = lookup_syntax(registry, :mesh, :uniform_1d)
@@ -8,7 +15,45 @@
         @test mesh_spec.domain === :mesh
         @test backend_spec.domain === :backend
         @test bc_spec.type_name === :dirichlet
-        @test_throws ArgumentError lookup_syntax(registry, :backend, :does_not_exist)
+        @test_throws Flopsy.ConfigValidationError lookup_syntax(registry, :backend, :does_not_exist)
+    end
+
+    @testset "central schema validation rejects unknown and invalid fields" begin
+        unknown_key = Dict(
+            "mesh" => Dict("main" => Dict(
+                "type" => "uniform_1d",
+                "xmin" => 0.0,
+                "xmax" => 1.0,
+                "nx" => 11,
+                "nxx" => 12,
+            )),
+        )
+        msg = _error_message(() -> build_context(parse_input_deck(unknown_key)))
+        @test msg !== nothing
+        @test occursin("unknown key", msg)
+        @test occursin("nxx", msg)
+
+        missing_required = Dict(
+            "mesh" => Dict("main" => Dict("type" => "uniform_1d", "xmin" => 0.0, "xmax" => 1.0)),
+        )
+        msg = _error_message(() -> build_context(parse_input_deck(missing_required)))
+        @test msg !== nothing
+        @test occursin("missing required field", msg)
+        @test occursin("nx", msg)
+
+        invalid_enum = Dict(
+            "bc" => Dict("left" => Dict(
+                "type" => "dirichlet",
+                "species" => "u",
+                "boundary" => "left",
+                "value" => 0.0,
+                "method" => "weakish",
+            )),
+        )
+        msg = _error_message(() -> build_context(parse_input_deck(invalid_enum)))
+        @test msg !== nothing
+        @test occursin("Allowed values", msg)
+        @test occursin("weakish", msg)
     end
 
     @testset "named-block input deck builds and solves" begin
@@ -40,7 +85,7 @@
         )
         deck = parse_input_deck(raw)
         ctx = build_context(deck)
-        @test_throws ArgumentError Flopsy.build_simulation(ctx)
+        @test_throws Flopsy.ConfigValidationError Flopsy.build_simulation(ctx)
     end
 
     @testset "species-targeted BC validation rejects stationary species" begin
@@ -68,13 +113,49 @@
         )
         deck = parse_input_deck(raw)
         ctx = build_context(deck)
-        @test_throws ArgumentError Flopsy.build_simulation(ctx)
+        @test_throws Flopsy.ConfigValidationError Flopsy.build_simulation(ctx)
+    end
+
+    @testset "invalid references and species names surface useful errors" begin
+        bad_problem_ref = Dict(
+            "mesh" => Dict("main" => Dict("type" => "uniform_1d", "xmin" => 0.0, "xmax" => 1.0, "nx" => 11)),
+            "backend" => Dict("main" => Dict("type" => "diffusion_1d", "diffusion_coefficient" => 0.1)),
+            "problem" => Dict("run" => Dict(
+                "type" => "simulation",
+                "mesh" => "missing_mesh",
+                "backend" => "main",
+                "tspan" => [0.0, 1.0],
+            )),
+        )
+        ctx = build_context(parse_input_deck(bad_problem_ref))
+        msg = _error_message(() -> Flopsy.build_simulation(ctx))
+        @test msg !== nothing
+        @test occursin("Unknown mesh reference", msg)
+
+        bad_species = Dict(
+            "mesh" => Dict("main" => Dict("type" => "uniform_1d", "xmin" => 0.0, "xmax" => 1.0, "nx" => 11)),
+            "backend" => Dict("main" => Dict("type" => "diffusion_1d", "diffusion_coefficient" => 0.1)),
+            "ic" => Dict("bad" => Dict("type" => "uniform_species", "species" => "typo_u", "value" => 1.0)),
+            "problem" => Dict("run" => Dict(
+                "type" => "simulation",
+                "mesh" => "main",
+                "backend" => "main",
+                "ics" => ["bad"],
+                "tspan" => [0.0, 1.0],
+            )),
+        )
+        ctx = build_context(parse_input_deck(bad_species))
+        msg = _error_message(() -> Flopsy.build_simulation(ctx))
+        @test msg !== nothing
+        @test occursin("Unknown species", msg)
     end
 
     @testset "CLI validate syntax xdmf and run" begin
         deck = joinpath(@__DIR__, "..", "examples", "trapping_1d_with_bc_ic.toml")
         tmp = mktempdir()
         cd(tmp) do
+            @test cli_main(["--help"]) == 0
+            @test cli_main(["--version"]) == 0
             @test cli_main(["validate", deck]) == 0
             @test cli_main(["syntax", "list"]) == 0
             @test cli_main(["syntax", "show", "bc", "dirichlet"]) == 0
@@ -85,6 +166,24 @@
             @test isfile(joinpath(tmp, "manual.xdmf"))
             @test isfile(joinpath(tmp, "trapping_fields.xdmf"))
         end
+    end
+
+    @testset "CLI returns failure for invalid arguments and invalid decks" begin
+        @test cli_main(["run"]) == 1
+        @test cli_main(["syntax", "show", "bc"]) == 1
+
+        bad_deck = tempname() * ".toml"
+        open(bad_deck, "w") do io
+            write(io, """
+[mesh.main]
+type = "uniform_1d"
+xmin = 0.0
+xmax = 1.0
+nx = 11
+oops = 3
+""")
+        end
+        @test cli_main(["validate", bad_deck]) == 1
     end
 
     @testset "plugin install list and remove use managed environment" begin

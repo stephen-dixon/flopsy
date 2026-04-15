@@ -3,9 +3,14 @@ using TOML
 """
     load_config(path) -> ProblemConfig
 
-Load a TOML input deck and parse it into a typed `ProblemConfig`.
+Deprecated legacy entry point. Load a legacy TOML config into a typed
+`ProblemConfig`.
 """
 function load_config(path::AbstractString)
+    Base.depwarn(
+        "`load_config` is deprecated. The supported TOML workflow is `parse_input_deck`/`validate_input_deck`/`run_input_deck` with the registry-driven input-deck system.",
+        :load_config,
+    )
     raw = TOML.parsefile(path)
     return parse_config(raw)
 end
@@ -13,10 +18,14 @@ end
 """
     parse_config(raw) -> ProblemConfig
 
-Parse an `AbstractDict` containing TOML-like input into the typed config
-objects used by the problem factory.
+Deprecated legacy entry point. Parse an `AbstractDict` into the typed config
+objects used by the old problem factory.
 """
 function parse_config(raw::AbstractDict)
+    Base.depwarn(
+        "`parse_config` is deprecated. The supported TOML workflow is the registry-driven input-deck system via `parse_input_deck`.",
+        :parse_config,
+    )
     cfg = _normalize_legacy_config(raw)
     mesh = _parse_mesh_config(_required_table(cfg, "mesh"))
     solver = _parse_input_solver_config(_required_table(cfg, "solver"))

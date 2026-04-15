@@ -1,17 +1,21 @@
 # Flopsy.jl Documentation
 
-## What is Flopsy?
+## What Flopsy Is
 
-Flopsy is a Julia package for stiff one-dimensional reaction-diffusion simulations with:
+Flopsy is a Julia package for stiff one-dimensional reaction-diffusion simulations.
 
-- a programmable, type-stable core for direct Julia use
-- a registry-driven TOML layer and CLI for supported input-deck workflows
+It has two supported entry styles:
 
-Both paths lower to the same `SystemModel` and solver APIs.
+- a CLI for registry-driven TOML input decks
+- a Julia library API for direct model construction and execution
 
-## Registered syntax model
+These are not separate numerical engines. The input-deck system validates and assembles objects that ultimately run through the same solver stack used by the Julia API.
 
-Input decks are built from a fixed set of top-level domains:
+## Supported TOML Workflow
+
+The only supported TOML configuration workflow is the registry-driven input-deck model.
+
+Input decks are composed from named blocks in fixed domains:
 
 - `mesh`
 - `backend`
@@ -20,109 +24,49 @@ Input decks are built from a fixed set of top-level domains:
 - `output`
 - `problem`
 
-Each named block declares a registered `type`. The registry is keyed by `(domain, type)` pairs, and each entry carries:
+Each block declares a registered `type`. Built-ins and plugins both contribute syntax entries through the same `SyntaxRegistry`.
 
-- a parameter schema
-- defaults and required fields
-- validation logic
-- help text
-- a build callback
+The old typed TOML/config path still exists only as a deprecated compatibility layer and is no longer documented as a primary workflow.
 
-Built-ins register syntax through the same mechanism as plugins. Unknown syntax fails with a registry-based error instead of falling through a hard-coded parser branch.
+## Primary User Paths
 
-## Build pipeline
+### CLI
 
-The config path has two stages.
+Use the CLI when you want:
 
-### Stage 1: build named objects
+- a declarative input-deck workflow
+- centralized validation and diagnostics
+- live syntax inspection
+- runtime plugin loading
+- a clean path to a standalone app build
 
-Flopsy parses TOML into named blocks such as `[mesh.main]` or `[ic.eq]`, validates those blocks against the syntax registry, and stores built objects into a `BuildContext`.
+### Julia Library
 
-### Stage 2: assemble the simulation
+Use the Julia API when you want:
 
-A `[problem.<name>]` block references the previously built mesh, backend, IC, BC, and output objects. Flopsy then assembles a `SimulationProblem` and solves it through the standard solver stack.
+- direct access to `SystemModel` construction
+- programmatic composition of simulations
+- custom orchestration from Julia code
+- lower-level extension points
 
-## Species are backend-defined
+## Canonical Flow
 
-Backends own the state layout and expose species metadata through `SpeciesInfo`.
+The canonical input-deck flow is:
 
-That metadata is used to validate:
+1. Parse the input deck.
+2. Validate blocks against registered syntax.
+3. Build a validated `BuildContext` of named objects.
+4. Assemble a `ConfiguredSimulation` from a `[problem.<name>]` block.
+5. Run it through the CLI or from Julia.
 
-- which species exist
-- which species support explicit BC treatment
-- which species each IC affects
-- whether multiple ICs overlap
+## Quick Links
 
-Flopsy does not expose user-declared `[variables]` TOML blocks yet. That is deliberate: backends are the source of truth for the state layout.
-
-## Typical workflow
-
-```toml
-[mesh.main]
-type = "uniform_1d"
-xmin = 0.0
-xmax = 1.0
-nx = 201
-
-[backend.main]
-type = "trapping_1d"
-k_trap = 5.0
-k_detrap = 0.5
-diffusion_coefficient = 0.01
-
-[ic.mobile]
-type = "uniform_species"
-species = "H_mobile"
-value = 1e-3
-
-[output.fields]
-type = "hdf5"
-file = "fields.h5"
-xdmf = true
-
-[problem.run]
-type = "trapping_1d"
-mesh = "main"
-backend = "main"
-ics = ["mobile"]
-outputs = ["fields"]
-tspan = [0.0, 1.0]
-saveat = [0.0, 0.5, 1.0]
-```
-
-Then:
-
-```bash
-flopsy validate input.toml
-flopsy run input.toml
-```
-
-## CLI and plugins
-
-The `flopsy` CLI supports:
-
-- `run`
-- `validate`
-- `syntax list`
-- `syntax show`
-- `plugin list`
-- `plugin register`
-- `plugin remove`
-- `xdmf`
-
-Plugins are installed into a managed runtime Julia environment. This keeps the compiled CLI stable while still allowing new syntax to be added after installation.
-
-## Current status
-
-- explicit TOML BC syntax currently supports `dirichlet`
-- if no `[bc.*]` blocks are supplied, diffusion uses implicit zero-flux Neumann behaviour
-- `biased_1d` is registered, but nonuniform numerics are not implemented yet
-- Palioxis equilibrium IC registration lives in `ext/PalioxisExt.jl`
-
-## Quick links
-
-- [Configuration](configuration.md)
+- [CLI Usage](cli.md)
+- [Julia Library Usage](julia_library.md)
+- [Input Deck Format](input_deck.md)
+- [Syntax Registration and Extension Model](extensions.md)
+- [Plugins](plugins.md)
+- [Standalone Compilation](standalone_compilation.md)
+- [Legacy API Deprecation Note](legacy_api.md)
 - [Architecture](architecture.md)
-- [Hotgates Interface](hotgates.md)
-- [HDF5 Output](hdf5.md)
 - [API Reference](api.md)

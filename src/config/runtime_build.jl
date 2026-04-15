@@ -1,6 +1,11 @@
+"""
+    build_simulation(ctx, problem_name = _default_problem_name(ctx))
+
+Assemble a named problem from a validated `BuildContext`.
+"""
 function build_simulation(ctx::BuildContext, problem_name::Symbol = _default_problem_name(ctx))
     haskey(ctx.problems, problem_name) ||
-        throw(ArgumentError("Unknown problem block '$problem_name'"))
+        throw(ConfigValidationError("Unknown problem block '$problem_name'"))
 
     problem_def = ctx.problems[problem_name]
     mesh = _lookup_named(ctx.meshes, problem_def.mesh, :mesh)
@@ -33,6 +38,11 @@ function _solve_configured_simulation(plan::ConfiguredSimulation)
     return result
 end
 
+"""
+    validate_input_deck(path; registry = build_registry())
+
+Parse, validate, and assemble an input deck without running the solver.
+"""
 function validate_input_deck(path::AbstractString; registry::SyntaxRegistry = build_registry())
     deck = parse_input_deck(path)
     ctx = build_context(deck; registry = registry)
@@ -40,6 +50,11 @@ function validate_input_deck(path::AbstractString; registry::SyntaxRegistry = bu
     return ctx
 end
 
+"""
+    run_input_deck(path; registry = build_registry())
+
+Parse, validate, assemble, and run a registry-driven input deck.
+"""
 function run_input_deck(path::AbstractString; registry::SyntaxRegistry = build_registry())
     deck = parse_input_deck(path)
     ctx = build_context(deck; registry = registry)
@@ -47,12 +62,12 @@ function run_input_deck(path::AbstractString; registry::SyntaxRegistry = build_r
 end
 
 function _default_problem_name(ctx::BuildContext)
-    isempty(ctx.problems) && throw(ArgumentError("No [problem.<name>] blocks were defined"))
+    isempty(ctx.problems) && throw(ConfigValidationError("No [problem.<name>] blocks were defined"))
     return only(sort!(collect(keys(ctx.problems)); by = string))
 end
 
 function _lookup_named(dict::Dict{Symbol, Any}, name::Symbol, domain::Symbol)
-    haskey(dict, name) || throw(ArgumentError("Unknown $(domain) reference '$name'"))
+    haskey(dict, name) || throw(ConfigValidationError("Unknown $(domain) reference '$name'"))
     return dict[name]
 end
 
@@ -60,9 +75,13 @@ function _validate_bc_targets!(backend, bcs::AbstractVector)
     for bc in bcs
         info = _species_info(backend, bc.species)
         info.boundary_target ||
-            throw(ArgumentError("Boundary condition $(bc.name) targets species $(bc.species), which does not support boundary treatment"))
+            throw(ConfigValidationError(
+                "Boundary condition `$(bc.name)` targets species `$(bc.species)`, which does not support boundary treatment",
+            ))
         info.transport == :diffusive ||
-            throw(ArgumentError("Boundary condition $(bc.name) targets species $(bc.species), which is not diffusive"))
+            throw(ConfigValidationError(
+                "Boundary condition `$(bc.name)` targets species `$(bc.species)`, which is not diffusive",
+            ))
     end
 end
 
@@ -72,7 +91,7 @@ function _validate_ic_targets!(backend, ics)
         for name in ic.affects
             _species_info(backend, name)
             name in assigned &&
-                throw(ArgumentError("Overlapping initial conditions detected for species $(name)"))
+                throw(ConfigValidationError("Overlapping initial conditions detected for species `$(name)`"))
             push!(assigned, name)
         end
     end
@@ -83,7 +102,7 @@ function _species_info(backend, name::Symbol)
         info.name == name && return info
     end
     available = join(string.(getfield.(backend.species, :name)), ", ")
-    throw(ArgumentError("Unknown species $(name). Available species: $(available)"))
+    throw(ConfigValidationError("Unknown species `$(name)`. Available species: $(available)"))
 end
 
 _species_index(backend, name::Symbol) = _species_info(backend, name).index
@@ -96,5 +115,5 @@ function _materialize_output!(result::SimulationResult, output::OutputDefinition
         end
         return output.file
     end
-    throw(ArgumentError("Unsupported output type $(output.type_name)"))
+    throw(ConfigValidationError("Unsupported output type $(output.type_name)"))
 end

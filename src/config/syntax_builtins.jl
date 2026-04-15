@@ -13,16 +13,16 @@ function _register_mesh_syntax!(registry::SyntaxRegistry)
         :mesh,
         :uniform_1d,
         [
-            ParameterSpec(:type, true, nothing, "Syntax type"),
-            ParameterSpec(:xmin, true, nothing, "Domain minimum"),
-            ParameterSpec(:xmax, true, nothing, "Domain maximum"),
-            ParameterSpec(:nx, true, nothing, "Number of nodes"),
+            ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+            ParameterSpec(:xmin, true, nothing, "Domain minimum"; kind = :real),
+            ParameterSpec(:xmax, true, nothing, "Domain maximum"; kind = :real),
+            ParameterSpec(:nx, true, nothing, "Number of nodes"; kind = :integer),
         ],
         "Uniform one-dimensional mesh.",
         (data, ctx, reg, block) -> begin
             Float64(data["xmax"]) > Float64(data["xmin"]) ||
-                throw(ArgumentError("Block [mesh.$(block.name)] requires xmax > xmin"))
-            Int(data["nx"]) >= 2 || throw(ArgumentError("Block [mesh.$(block.name)] requires nx >= 2"))
+                throw(ConfigValidationError("Block [mesh.$(block.name)] field `xmax` must be greater than `xmin`"))
+            Int(data["nx"]) >= 2 || throw(ConfigValidationError("Block [mesh.$(block.name)] field `nx` must be at least 2"))
         end,
         (data, ctx, reg, block) -> Mesh1D(Float64(data["xmax"]) - Float64(data["xmin"]), Int(data["nx"])),
         :builtin,
@@ -32,17 +32,19 @@ function _register_mesh_syntax!(registry::SyntaxRegistry)
         :mesh,
         :biased_1d,
         [
-            ParameterSpec(:type, true, nothing, "Syntax type"),
-            ParameterSpec(:xmin, true, nothing, "Domain minimum"),
-            ParameterSpec(:xmax, true, nothing, "Domain maximum"),
-            ParameterSpec(:nx, true, nothing, "Number of nodes"),
-            ParameterSpec(:bias_kind, true, nothing, "Bias strategy"),
-            ParameterSpec(:ratio, true, nothing, "Bias ratio"),
-            ParameterSpec(:cluster, true, nothing, "Clustering location"),
+            ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+            ParameterSpec(:xmin, true, nothing, "Domain minimum"; kind = :real),
+            ParameterSpec(:xmax, true, nothing, "Domain maximum"; kind = :real),
+            ParameterSpec(:nx, true, nothing, "Number of nodes"; kind = :integer),
+            ParameterSpec(:bias_kind, true, nothing, "Bias strategy"; kind = :string),
+            ParameterSpec(:ratio, true, nothing, "Bias ratio"; kind = :real),
+            ParameterSpec(:cluster, true, nothing, "Clustering location"; kind = :string),
         ],
-        "Registered biased 1D mesh syntax. Numerics are not implemented yet.",
+        "Experimental biased 1D mesh syntax. Numerics are not implemented yet.",
+        (data, ctx, reg, block) -> throw(ConfigValidationError(
+            "Block [mesh.$(block.name)] type `biased_1d` is experimental and not available for production use yet",
+        )),
         (data, ctx, reg, block) -> nothing,
-        (data, ctx, reg, block) -> throw(ErrorException("biased_1d is registered, but nonuniform mesh numerics are not implemented yet")),
         :builtin,
     ))
 end
@@ -52,10 +54,10 @@ function _register_backend_syntax!(registry::SyntaxRegistry)
         :backend,
         :diffusion_1d,
         [
-            ParameterSpec(:type, true, nothing, "Syntax type"),
-            ParameterSpec(:diffusion_coefficient, true, nothing, "Diffusion coefficient"),
-            ParameterSpec(:reaction_rate, false, 0.0, "Uniform decay rate"),
-            ParameterSpec(:species_name, false, "u", "Species name"),
+            ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+            ParameterSpec(:diffusion_coefficient, true, nothing, "Diffusion coefficient"; kind = :real),
+            ParameterSpec(:reaction_rate, false, 0.0, "Uniform decay rate"; kind = :real),
+            ParameterSpec(:species_name, false, "u", "Species name"; kind = :string),
         ],
         "Single-species reaction-diffusion backend with one diffusive field.",
         (data, ctx, reg, block) -> nothing,
@@ -67,12 +69,12 @@ function _register_backend_syntax!(registry::SyntaxRegistry)
         :backend,
         :trapping_1d,
         [
-            ParameterSpec(:type, true, nothing, "Syntax type"),
-            ParameterSpec(:k_trap, true, nothing, "Trap rate"),
-            ParameterSpec(:k_detrap, true, nothing, "Detrap rate"),
-            ParameterSpec(:diffusion_coefficient, true, nothing, "Mobile diffusion coefficient"),
-            ParameterSpec(:mobile_species, false, "H_mobile", "Mobile species name"),
-            ParameterSpec(:trapped_species, false, "H_trapped", "Trapped species name"),
+            ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+            ParameterSpec(:k_trap, true, nothing, "Trap rate"; kind = :real),
+            ParameterSpec(:k_detrap, true, nothing, "Detrap rate"; kind = :real),
+            ParameterSpec(:diffusion_coefficient, true, nothing, "Mobile diffusion coefficient"; kind = :real),
+            ParameterSpec(:mobile_species, false, "H_mobile", "Mobile species name"; kind = :string),
+            ParameterSpec(:trapped_species, false, "H_trapped", "Trapped species name"; kind = :string),
         ],
         "Two-species trapping backend with one diffusive mobile species and one stationary trapped species.",
         (data, ctx, reg, block) -> nothing,
@@ -84,13 +86,13 @@ function _register_backend_syntax!(registry::SyntaxRegistry)
         :backend,
         :hotgates_trapping,
         [
-            ParameterSpec(:type, true, nothing, "Syntax type"),
-            ParameterSpec(:k_trap, true, nothing, "Trap rate"),
-            ParameterSpec(:k_detrap, true, nothing, "Detrap rate"),
-            ParameterSpec(:diffusion_coefficient, true, nothing, "Mobile diffusion coefficient"),
-            ParameterSpec(:temperature, false, 300.0, "Uniform temperature"),
-            ParameterSpec(:mobile_species, false, "H_mobile", "Mobile species name"),
-            ParameterSpec(:trapped_species, false, "H_trapped", "Trapped species name"),
+            ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+            ParameterSpec(:k_trap, true, nothing, "Trap rate"; kind = :real),
+            ParameterSpec(:k_detrap, true, nothing, "Detrap rate"; kind = :real),
+            ParameterSpec(:diffusion_coefficient, true, nothing, "Mobile diffusion coefficient"; kind = :real),
+            ParameterSpec(:temperature, false, 300.0, "Uniform temperature"; kind = :real),
+            ParameterSpec(:mobile_species, false, "H_mobile", "Mobile species name"; kind = :string),
+            ParameterSpec(:trapped_species, false, "H_trapped", "Trapped species name"; kind = :string),
         ],
         "Fake Hotgates-style backend for testing and config-driven workflows without Palioxis.",
         (data, ctx, reg, block) -> nothing,
@@ -104,10 +106,10 @@ function _register_ic_syntax!(registry::SyntaxRegistry)
         :ic,
         :uniform_species,
         [
-            ParameterSpec(:type, true, nothing, "Syntax type"),
-            ParameterSpec(:species, true, nothing, "Target species"),
-            ParameterSpec(:value, true, nothing, "Uniform value"),
-            ParameterSpec(:backend, false, nothing, "Optional backend name"),
+            ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+            ParameterSpec(:species, true, nothing, "Target species"; kind = :string),
+            ParameterSpec(:value, true, nothing, "Uniform value"; kind = :real),
+            ParameterSpec(:backend, false, nothing, "Optional backend name"; kind = :string),
         ],
         "Uniform species-targeting initial condition.",
         (data, ctx, reg, block) -> nothing,
@@ -132,17 +134,21 @@ function _register_bc_syntax!(registry::SyntaxRegistry)
         :bc,
         :dirichlet,
         [
-            ParameterSpec(:type, true, nothing, "Syntax type"),
-            ParameterSpec(:species, true, nothing, "Target species"),
-            ParameterSpec(:boundary, true, nothing, "left or right"),
-            ParameterSpec(:value, true, nothing, "Boundary value"),
-            ParameterSpec(:method, false, "weak", "weak, penalty, mass_matrix, callback, eliminated"),
+            ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+            ParameterSpec(:species, true, nothing, "Target species"; kind = :string),
+            ParameterSpec(:boundary, true, nothing, "left or right"; kind = :string, allowed_values = ["left", "right"]),
+            ParameterSpec(:value, true, nothing, "Boundary value"; kind = :real),
+            ParameterSpec(
+                :method,
+                false,
+                "weak",
+                "weak, penalty, mass_matrix, callback, eliminated";
+                kind = :string,
+                allowed_values = ["weak", "penalty", "mass_matrix", "callback", "eliminated"],
+            ),
         ],
         "Species-targeted Dirichlet boundary condition. If no BC blocks are provided, the default is implicit zero-flux Neumann behaviour from the diffusion operator.",
-        (data, ctx, reg, block) -> begin
-            Symbol(data["boundary"]) in (:left, :right) ||
-                throw(ArgumentError("Block [bc.$(block.name)] requires boundary = \"left\" or \"right\""))
-        end,
+        (data, ctx, reg, block) -> nothing,
         (data, ctx, reg, block) -> BCDefinition(
             block.name,
             block.type_name,
@@ -160,10 +166,10 @@ function _register_output_syntax!(registry::SyntaxRegistry)
         :output,
         :hdf5,
         [
-            ParameterSpec(:type, true, nothing, "Syntax type"),
-            ParameterSpec(:file, true, nothing, "Output HDF5 file"),
-            ParameterSpec(:xdmf, false, false, "Generate XDMF companion"),
-            ParameterSpec(:summary_csv, false, "", "Optional summary CSV path"),
+            ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+            ParameterSpec(:file, true, nothing, "Output HDF5 file"; kind = :string),
+            ParameterSpec(:xdmf, false, false, "Generate XDMF companion"; kind = :bool),
+            ParameterSpec(:summary_csv, false, "", "Optional summary CSV path"; kind = :string),
         ],
         "HDF5 field output with optional XDMF companion generation.",
         (data, ctx, reg, block) -> nothing,
@@ -179,19 +185,19 @@ end
 
 function _register_problem_syntax!(registry::SyntaxRegistry)
     params = [
-        ParameterSpec(:type, true, nothing, "Syntax type"),
-        ParameterSpec(:mesh, true, nothing, "Referenced mesh object"),
-        ParameterSpec(:backend, true, nothing, "Referenced backend object"),
-        ParameterSpec(:ics, false, String[], "Referenced IC objects"),
-        ParameterSpec(:bcs, false, String[], "Referenced BC objects"),
-        ParameterSpec(:outputs, false, String[], "Referenced output objects"),
-        ParameterSpec(:tspan, true, nothing, "Two-element time span"),
-        ParameterSpec(:formulation, false, "unsplit", "Solver formulation"),
-        ParameterSpec(:algorithm, false, "Rodas5", "Solver algorithm"),
-        ParameterSpec(:abstol, false, 1e-8, "Absolute tolerance"),
-        ParameterSpec(:reltol, false, 1e-6, "Relative tolerance"),
-        ParameterSpec(:saveat, false, nothing, "Save times"),
-        ParameterSpec(:dt, false, nothing, "Fixed/split time step"),
+        ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+        ParameterSpec(:mesh, true, nothing, "Referenced mesh object"; kind = :string),
+        ParameterSpec(:backend, true, nothing, "Referenced backend object"; kind = :string),
+        ParameterSpec(:ics, false, String[], "Referenced IC objects"; kind = :vector, element_kind = :string),
+        ParameterSpec(:bcs, false, String[], "Referenced BC objects"; kind = :vector, element_kind = :string),
+        ParameterSpec(:outputs, false, String[], "Referenced output objects"; kind = :vector, element_kind = :string),
+        ParameterSpec(:tspan, true, nothing, "Two-element time span"; kind = :vector, element_kind = :real),
+        ParameterSpec(:formulation, false, "unsplit", "Solver formulation"; kind = :string, allowed_values = ["unsplit", "imex", "imex_reaction", "split", "residual"]),
+        ParameterSpec(:algorithm, false, "Rodas5", "Solver algorithm"; kind = :string, allowed_values = ["Rodas5", "Rodas5P", "KenCarp4", "CVODE_BDF"]),
+        ParameterSpec(:abstol, false, 1e-8, "Absolute tolerance"; kind = :real),
+        ParameterSpec(:reltol, false, 1e-6, "Relative tolerance"; kind = :real),
+        ParameterSpec(:saveat, false, nothing, "Save times"; kind = :vector, element_kind = :real),
+        ParameterSpec(:dt, false, nothing, "Fixed/split time step"; kind = :real),
     ]
 
     for type_name in (:simulation, :diffusion_1d, :trapping_1d, :hotgates_trapping)
@@ -202,7 +208,7 @@ function _register_problem_syntax!(registry::SyntaxRegistry)
             "Simulation assembly block referencing named mesh/backend/ic/bc/output objects.",
             (data, ctx, reg, block) -> begin
                 length(data["tspan"]) == 2 ||
-                    throw(ArgumentError("Block [problem.$(block.name)] requires a two-element tspan"))
+                    throw(ConfigValidationError("Block [problem.$(block.name)] field `tspan` must contain exactly two values"))
             end,
             (data, ctx, reg, block) -> ProblemDefinition(
                 block.name,
@@ -309,7 +315,9 @@ function _build_boundary_operator_from_defs(bcs::Vector{BCDefinition}, layout::V
     names = variable_names(layout)
     for bc in bcs
         idx = findfirst(==(bc.species), names)
-        idx === nothing && throw(ArgumentError("Unknown boundary species $(bc.species) for layout $(names)"))
+        idx === nothing && throw(ConfigValidationError(
+            "Boundary condition `$(bc.name)` references unknown species `$(bc.species)`. Available species: $(join(string.(names), ", "))",
+        ))
         selector = let idx = idx
             layout -> [idx]
         end

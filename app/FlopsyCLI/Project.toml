@@ -1,0 +1,6 @@
+name = "FlopsyCLI"
+uuid = "fd4c8ff0-db3d-4cb8-9d64-73f1a3452d16"
+version = "0.1.0"
+
+[deps]
+Flopsy = "1dba178f-ad43-479e-9eb8-d59b35e847b9"
