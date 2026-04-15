@@ -9,114 +9,141 @@ using Flopsy
 using Palioxis
 
 function register_flopsy_plugin!(registry::Flopsy.SyntaxRegistry)
-    Flopsy.register_syntax!(registry, Flopsy.SyntaxSpec(
-        :backend,
-        :palioxis_trapping,
-        [
-            Flopsy.ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
-            Flopsy.ParameterSpec(:xml_file, true, nothing, "Palioxis XML model file"; kind = :string),
-            Flopsy.ParameterSpec(:palioxis_root, false, "", "Optional Palioxis root for init"; kind = :string),
-            Flopsy.ParameterSpec(:defect_density, false, 1e-3, "Uniform defect density"; kind = :real),
-        ],
-        "Palioxis-backed trapping backend registered by the Palioxis extension.",
-        (data, ctx, reg, block) -> nothing,
-        (data, ctx, reg, block) -> begin
-            root = String(get(data, "palioxis_root", ""))
-            !isempty(root) && Palioxis.init(root)
-            pal_model = Palioxis.MultipleDefectModel(String(data["xml_file"]))
-            n_gas = pal_model.n_gas
-            n_ne = pal_model.n_ne_species
-            species = SpeciesInfo[]
-            for (i, name) in enumerate(Symbol.(Palioxis.gas_names(pal_model)))
-                push!(species, Flopsy.SpeciesInfo(name, :mobile, :diffusive, i, "Palioxis gas species", true))
-            end
-            for (j, name) in enumerate(Symbol.(Palioxis.trap_names(pal_model)))
-                push!(species, Flopsy.SpeciesInfo(name, :trapped, :stationary, n_gas + j, "Palioxis trapped species", false))
-            end
-
-            build_model = function (mesh, bcs)
-                nx = length(mesh.x)
-                defects = fill(Float64(data["defect_density"]), pal_model.n_traps, nx)
-                trap_occupancies = Palioxis.get_max_trap_occupancy(pal_model)
-                trap_groups = Vector{Vector{Int}}()
-                pos = 1
-                for occ in trap_occupancies
-                    push!(trap_groups, collect(pos:(pos + occ - 1)))
-                    pos += occ
+    Flopsy.register_syntax!(registry,
+        Flopsy.SyntaxSpec(
+            :backend,
+            :palioxis_trapping,
+            [
+                Flopsy.ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+                Flopsy.ParameterSpec(
+                    :xml_file, true, nothing, "Palioxis XML model file"; kind = :string),
+                Flopsy.ParameterSpec(:palioxis_root, false, "",
+                    "Optional Palioxis root for init"; kind = :string),
+                Flopsy.ParameterSpec(
+                    :defect_density, false, 1e-3, "Uniform defect density"; kind = :real)
+            ],
+            "Palioxis-backed trapping backend registered by the Palioxis extension.",
+            (data, ctx, reg, block) -> nothing,
+            (data,
+                ctx,
+                reg,
+                block) -> begin
+                root = String(get(data, "palioxis_root", ""))
+                !isempty(root) && Palioxis.init(root)
+                pal_model = Palioxis.MultipleDefectModel(String(data["xml_file"]))
+                n_gas = pal_model.n_gas
+                n_ne = pal_model.n_ne_species
+                species = SpeciesInfo[]
+                for (i, name) in enumerate(Symbol.(Palioxis.gas_names(pal_model)))
+                    push!(species,
+                        Flopsy.SpeciesInfo(
+                            name, :mobile, :diffusive, i, "Palioxis gas species", true))
                 end
-                adaptor = Flopsy.HotgatesTrappingAdaptor(
-                    collect(1:n_gas),
-                    collect((n_gas + 1):(n_gas + n_ne)),
-                    Palioxis.gas_names(pal_model),
-                    Palioxis.trap_names(pal_model),
-                    Palioxis.defect_names(pal_model),
-                    Matrix{Float64}(defects),
-                    trap_groups,
-                )
-                diff_coeffs = PalioxisDiffusionCoefficients(pal_model)
-                layout = Flopsy.build_hotgates_variable_layout(adaptor)
-                boundary = Flopsy._build_boundary_operator_from_defs(bcs, layout, diff_coeffs)
-                return Flopsy.build_rd_model(
-                    layout = layout,
-                    mesh = mesh,
-                    reaction = Flopsy.HotgatesReactionOperator(pal_model, adaptor, Flopsy.ConstantTemperature(300.0)),
-                    diffusion = Flopsy.LinearDiffusionOperator(diff_coeffs, layout -> Flopsy.variables_with_tag(layout, :diffusion), nothing, Flopsy.ConstantTemperature(300.0)),
-                    boundary = boundary,
-                )
-            end
+                for (j, name) in enumerate(Symbol.(Palioxis.trap_names(pal_model)))
+                    push!(species,
+                        Flopsy.SpeciesInfo(name, :trapped, :stationary, n_gas + j,
+                            "Palioxis trapped species", false))
+                end
 
-            return Flopsy.BackendDefinition(
-                block.name,
-                :palioxis_trapping,
-                species,
-                build_model,
-                (; palioxis_model = pal_model),
-            )
-        end,
-        :palioxis,
-    ))
-
-    Flopsy.register_syntax!(registry, Flopsy.SyntaxSpec(
-        :ic,
-        :palioxis_equilibrium,
-        [
-            Flopsy.ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
-            Flopsy.ParameterSpec(:backend, true, nothing, "Referenced backend"; kind = :string),
-            Flopsy.ParameterSpec(:driving_quantity, true, nothing, "Currently supports H_total"; kind = :string, allowed_values = ["H_total"]),
-            Flopsy.ParameterSpec(:value, true, nothing, "Driving value"; kind = :real),
-            Flopsy.ParameterSpec(:temperature, true, nothing, "Equilibrium temperature"; kind = :real),
-        ],
-        "Palioxis equilibrium initial condition registered by the Palioxis extension.",
-        (data, ctx, reg, block) -> begin
-            Symbol(data["backend"]) in keys(ctx.backends) ||
-                throw(Flopsy.ConfigValidationError(
-                    "Block [ic.$(block.name)] field `backend` references unknown backend `$(data["backend"])`",
-                ))
-        end,
-        (data, ctx, reg, block) -> begin
-            backend = ctx.backends[Symbol(data["backend"])]
-            pal_model = backend.metadata.palioxis_model
-            affects = Symbol[info.name for info in backend.species]
-            return Flopsy.ICDefinition(
-                block.name,
-                block.type_name,
-                Symbol(data["backend"]),
-                affects,
-                (u0, backend_def, model) -> begin
-                    total = fill(Float64(data["value"]), model.context.nx)
-                    tmp = Flopsy.build_ic_from_total_hydrogen(
-                        pal_model,
-                        model,
-                        total,
-                        Float64(data["temperature"]),
+                build_model = function (mesh, bcs)
+                    nx = length(mesh.x)
+                    defects = fill(Float64(data["defect_density"]), pal_model.n_traps, nx)
+                    trap_occupancies = Palioxis.get_max_trap_occupancy(pal_model)
+                    trap_groups = Vector{Vector{Int}}()
+                    pos = 1
+                    for occ in trap_occupancies
+                        push!(trap_groups, collect(pos:(pos + occ - 1)))
+                        pos += occ
+                    end
+                    adaptor = Flopsy.HotgatesTrappingAdaptor(
+                        collect(1:n_gas),
+                        collect((n_gas + 1):(n_gas + n_ne)),
+                        Palioxis.gas_names(pal_model),
+                        Palioxis.trap_names(pal_model),
+                        Palioxis.defect_names(pal_model),
+                        Matrix{Float64}(defects),
+                        trap_groups
                     )
-                    copyto!(u0, tmp)
-                    return u0
-                end,
-            )
-        end,
-        :palioxis,
-    ))
+                    diff_coeffs = PalioxisDiffusionCoefficients(pal_model)
+                    layout = Flopsy.build_hotgates_variable_layout(adaptor)
+                    boundary = Flopsy._build_boundary_operator_from_defs(bcs, layout, diff_coeffs)
+                    return Flopsy.build_rd_model(
+                        layout = layout,
+                        mesh = mesh,
+                        reaction = Flopsy.HotgatesReactionOperator(
+                            pal_model, adaptor, Flopsy.ConstantTemperature(300.0)),
+                        diffusion = Flopsy.LinearDiffusionOperator(diff_coeffs,
+                            layout -> Flopsy.variables_with_tag(layout, :diffusion),
+                            nothing, Flopsy.ConstantTemperature(300.0)),
+                        boundary = boundary
+                    )
+                end
+
+                return Flopsy.BackendDefinition(
+                    block.name,
+                    :palioxis_trapping,
+                    species,
+                    build_model,
+                    (; palioxis_model = pal_model)
+                )
+            end,
+            :palioxis
+        ))
+
+    Flopsy.register_syntax!(registry,
+        Flopsy.SyntaxSpec(
+            :ic,
+            :palioxis_equilibrium,
+            [
+                Flopsy.ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+                Flopsy.ParameterSpec(
+                    :backend, true, nothing, "Referenced backend"; kind = :string),
+                Flopsy.ParameterSpec(
+                    :driving_quantity, true, nothing, "Currently supports H_total";
+                    kind = :string, allowed_values = ["H_total"]),
+                Flopsy.ParameterSpec(:value, true, nothing, "Driving value"; kind = :real),
+                Flopsy.ParameterSpec(
+                    :temperature, true, nothing, "Equilibrium temperature"; kind = :real)
+            ],
+            "Palioxis equilibrium initial condition registered by the Palioxis extension.",
+            (data,
+                ctx,
+                reg,
+                block) -> begin
+                Symbol(data["backend"]) in keys(ctx.backends) ||
+                    throw(Flopsy.ConfigValidationError(
+                        "Block [ic.$(block.name)] field `backend` references unknown backend `$(data["backend"])`",
+                    ))
+            end,
+            (data,
+                ctx,
+                reg,
+                block) -> begin
+                backend = ctx.backends[Symbol(data["backend"])]
+                pal_model = backend.metadata.palioxis_model
+                affects = Symbol[info.name for info in backend.species]
+                return Flopsy.ICDefinition(
+                    block.name,
+                    block.type_name,
+                    Symbol(data["backend"]),
+                    affects,
+                    (u0,
+                        backend_def,
+                        model) -> begin
+                        total = fill(Float64(data["value"]), model.context.nx)
+                        tmp = Flopsy.build_ic_from_total_hydrogen(
+                            pal_model,
+                            model,
+                            total,
+                            Float64(data["temperature"])
+                        )
+                        copyto!(u0, tmp)
+                        return u0
+                    end
+                )
+            end,
+            :palioxis
+        ))
 
     return registry
 end

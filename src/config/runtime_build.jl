@@ -12,7 +12,8 @@ function build_simulation(ctx::BuildContext, problem_name::Symbol = _default_pro
     backend = _lookup_named(ctx.backends, problem_def.backend, :backend)
     ics = ICDefinition[_lookup_named(ctx.ics, name, :ic) for name in problem_def.ics]
     bcs = BCDefinition[_lookup_named(ctx.bcs, name, :bc) for name in problem_def.bcs]
-    outputs = OutputDefinition[_lookup_named(ctx.outputs, name, :output) for name in problem_def.outputs]
+    outputs = OutputDefinition[_lookup_named(ctx.outputs, name, :output)
+                               for name in problem_def.outputs]
 
     _validate_bc_targets!(backend, bcs)
     _validate_ic_targets!(backend, ics)
@@ -24,7 +25,8 @@ function build_simulation(ctx::BuildContext, problem_name::Symbol = _default_pro
     end
 
     solver_config = _build_solver_config(problem_def.solver)
-    sim_problem = SimulationProblem(model, u0, problem_def.tspan, solver_config, problem_def)
+    sim_problem = SimulationProblem(
+        model, u0, problem_def.tspan, solver_config, problem_def)
     return ConfiguredSimulation(sim_problem, outputs, ctx)
 end
 
@@ -62,12 +64,14 @@ function run_input_deck(path::AbstractString; registry::SyntaxRegistry = build_r
 end
 
 function _default_problem_name(ctx::BuildContext)
-    isempty(ctx.problems) && throw(ConfigValidationError("No [problem.<name>] blocks were defined"))
+    isempty(ctx.problems) &&
+        throw(ConfigValidationError("No [problem.<name>] blocks were defined"))
     return only(sort!(collect(keys(ctx.problems)); by = string))
 end
 
 function _lookup_named(dict::Dict{Symbol, Any}, name::Symbol, domain::Symbol)
-    haskey(dict, name) || throw(ConfigValidationError("Unknown $(domain) reference '$name'"))
+    haskey(dict, name) ||
+        throw(ConfigValidationError("Unknown $(domain) reference '$name'"))
     return dict[name]
 end
 

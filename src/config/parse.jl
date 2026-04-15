@@ -9,7 +9,7 @@ Deprecated legacy entry point. Load a legacy TOML config into a typed
 function load_config(path::AbstractString)
     Base.depwarn(
         "`load_config` is deprecated. The supported TOML workflow is `parse_input_deck`/`validate_input_deck`/`run_input_deck` with the registry-driven input-deck system.",
-        :load_config,
+        :load_config
     )
     raw = TOML.parsefile(path)
     return parse_config(raw)
@@ -24,14 +24,14 @@ objects used by the old problem factory.
 function parse_config(raw::AbstractDict)
     Base.depwarn(
         "`parse_config` is deprecated. The supported TOML workflow is the registry-driven input-deck system via `parse_input_deck`.",
-        :parse_config,
+        :parse_config
     )
     cfg = _normalize_legacy_config(raw)
     mesh = _parse_mesh_config(_required_table(cfg, "mesh"))
     solver = _parse_input_solver_config(_required_table(cfg, "solver"))
     bcs = _parse_boundary_conditions(get(cfg, "boundary_conditions", Any[]))
-    initial_conditions =
-        _parse_initial_conditions(get(cfg, "initial_conditions", Dict{String, Any}()))
+    initial_conditions = _parse_initial_conditions(get(cfg, "initial_conditions", Dict{
+        String, Any}()))
     parameters = _parse_parameters(cfg)
 
     return ProblemConfig(

@@ -6,7 +6,7 @@ Declarative schema for one user-facing TOML field in a registered syntax block.
 struct ParameterSpec
     name::Symbol
     required::Bool
-    default
+    default::Any
     doc::String
     kind::Symbol
     allowed_values::Union{Nothing, Vector{Any}}
@@ -14,13 +14,13 @@ struct ParameterSpec
 end
 
 function ParameterSpec(
-    name::Symbol,
-    required::Bool,
-    default,
-    doc::AbstractString;
-    kind::Symbol = :any,
-    allowed_values = nothing,
-    element_kind::Symbol = :any,
+        name::Symbol,
+        required::Bool,
+        default,
+        doc::AbstractString;
+        kind::Symbol = :any,
+        allowed_values = nothing,
+        element_kind::Symbol = :any
 )
     allowed = allowed_values === nothing ? nothing : collect(allowed_values)
     return ParameterSpec(name, required, default, String(doc), kind, allowed, element_kind)
@@ -90,15 +90,17 @@ mutable struct BuildContext
     artifacts::Dict{Symbol, Any}
 end
 
-BuildContext() = BuildContext(
-    Dict{Symbol, Any}(),
-    Dict{Symbol, Any}(),
-    Dict{Symbol, Any}(),
-    Dict{Symbol, Any}(),
-    Dict{Symbol, Any}(),
-    Dict{Symbol, Any}(),
-    Dict{Symbol, Any}(),
-)
+function BuildContext()
+    BuildContext(
+        Dict{Symbol, Any}(),
+        Dict{Symbol, Any}(),
+        Dict{Symbol, Any}(),
+        Dict{Symbol, Any}(),
+        Dict{Symbol, Any}(),
+        Dict{Symbol, Any}(),
+        Dict{Symbol, Any}()
+    )
+end
 
 struct SpeciesInfo
     name::Symbol

@@ -7,7 +7,7 @@ solver construction.
 function validate(cfg::ProblemConfig)
     Base.depwarn(
         "`validate(::ProblemConfig)` is deprecated. The supported TOML validation path is `validate_input_deck` on registry-driven input decks.",
-        :validate,
+        :validate
     )
     cfg.mesh.kind == :uniform_1d ||
         throw(ArgumentError("Only mesh.kind = \"uniform_1d\" is currently supported"))

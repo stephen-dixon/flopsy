@@ -80,7 +80,8 @@ function parse_input_deck(path::AbstractString)
 end
 
 function parse_input_deck(raw::AbstractDict; path = nothing)
-    blocks = Dict{Symbol, Vector{ConfigBlock}}(domain => ConfigBlock[] for domain in _CONFIG_DOMAINS)
+    blocks = Dict{Symbol, Vector{ConfigBlock}}(domain => ConfigBlock[]
+    for domain in _CONFIG_DOMAINS)
 
     for (key, value) in pairs(raw)
         domain = Symbol(key)
@@ -145,7 +146,7 @@ function _validate_block_schema(spec::SyntaxSpec, data::Dict{String, Any}, block
             throw(ConfigValidationError(_format_block_field_message(
                 block,
                 param.name,
-                "missing required field. Valid keys: $(_format_parameter_names(spec.parameters))",
+                "missing required field. Valid keys: $(_format_parameter_names(spec.parameters))"
             )))
         end
         haskey(data, String(param.name)) || continue
@@ -168,7 +169,7 @@ function _validate_parameter_value(param::ParameterSpec, value, block::ConfigBlo
         throw(ConfigValidationError(_format_block_field_message(
             block,
             param.name,
-            "expected $(_describe_kind(param.kind, param.element_kind)), got $(typeof(value))",
+            "expected $(_describe_kind(param.kind, param.element_kind)), got $(typeof(value))"
         )))
 
     if param.allowed_values !== nothing
@@ -177,14 +178,15 @@ function _validate_parameter_value(param::ParameterSpec, value, block::ConfigBlo
         normalized in allowed || throw(ConfigValidationError(_format_block_field_message(
             block,
             param.name,
-            "invalid value $(repr(value)). Allowed values: $(join(repr.(param.allowed_values), ", "))",
+            "invalid value $(repr(value)). Allowed values: $(join(repr.(param.allowed_values), ", "))"
         )))
     end
 
     return nothing
 end
 
-function _run_block_step(stage::Symbol, fn::Function, data, ctx, registry, block::ConfigBlock)
+function _run_block_step(
+        stage::Symbol, fn::Function, data, ctx, registry, block::ConfigBlock)
     try
         return fn(data, ctx, registry, block)
     catch err
@@ -275,6 +277,6 @@ function syntax_show(domain::Symbol, type_name::Symbol; registry::SyntaxRegistry
         type_name = spec.type_name,
         plugin = spec.plugin,
         help = spec.help,
-        parameters = spec.parameters,
+        parameters = spec.parameters
     )
 end

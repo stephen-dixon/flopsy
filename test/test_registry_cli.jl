@@ -1,10 +1,11 @@
 @testset "Registry and CLI" begin
-    _error_message(f) = try
-        f()
-        nothing
-    catch err
-        sprint(showerror, err)
-    end
+    _error_message(f) =
+        try
+            f()
+            nothing
+        catch err
+            sprint(showerror, err)
+        end
 
     @testset "built-in syntax is registered through the registry" begin
         registry = build_registry()
@@ -21,12 +22,12 @@
     @testset "central schema validation rejects unknown and invalid fields" begin
         unknown_key = Dict(
             "mesh" => Dict("main" => Dict(
-                "type" => "uniform_1d",
-                "xmin" => 0.0,
-                "xmax" => 1.0,
-                "nx" => 11,
-                "nxx" => 12,
-            )),
+            "type" => "uniform_1d",
+            "xmin" => 0.0,
+            "xmax" => 1.0,
+            "nx" => 11,
+            "nxx" => 12
+        )),
         )
         msg = _error_message(() -> build_context(parse_input_deck(unknown_key)))
         @test msg !== nothing
@@ -43,12 +44,12 @@
 
         invalid_enum = Dict(
             "bc" => Dict("left" => Dict(
-                "type" => "dirichlet",
-                "species" => "u",
-                "boundary" => "left",
-                "value" => 0.0,
-                "method" => "weakish",
-            )),
+            "type" => "dirichlet",
+            "species" => "u",
+            "boundary" => "left",
+            "value" => 0.0,
+            "method" => "weakish"
+        )),
         )
         msg = _error_message(() -> build_context(parse_input_deck(invalid_enum)))
         @test msg !== nothing
@@ -73,15 +74,15 @@
             "backend" => Dict("main" => Dict("type" => "diffusion_1d", "diffusion_coefficient" => 0.1)),
             "ic" => Dict(
                 "a" => Dict("type" => "uniform_species", "species" => "u", "value" => 1.0),
-                "b" => Dict("type" => "uniform_species", "species" => "u", "value" => 2.0),
+                "b" => Dict("type" => "uniform_species", "species" => "u", "value" => 2.0)
             ),
             "problem" => Dict("run" => Dict(
                 "type" => "simulation",
                 "mesh" => "main",
                 "backend" => "main",
                 "ics" => ["a", "b"],
-                "tspan" => [0.0, 1.0],
-            )),
+                "tspan" => [0.0, 1.0]
+            ))
         )
         deck = parse_input_deck(raw)
         ctx = build_context(deck)
@@ -95,21 +96,21 @@
                 "type" => "trapping_1d",
                 "k_trap" => 1.0,
                 "k_detrap" => 0.1,
-                "diffusion_coefficient" => 0.01,
+                "diffusion_coefficient" => 0.01
             )),
             "bc" => Dict("trap" => Dict(
                 "type" => "dirichlet",
                 "species" => "H_trapped",
                 "boundary" => "left",
-                "value" => 0.0,
+                "value" => 0.0
             )),
             "problem" => Dict("run" => Dict(
                 "type" => "simulation",
                 "mesh" => "main",
                 "backend" => "main",
                 "bcs" => ["trap"],
-                "tspan" => [0.0, 1.0],
-            )),
+                "tspan" => [0.0, 1.0]
+            ))
         )
         deck = parse_input_deck(raw)
         ctx = build_context(deck)
@@ -124,8 +125,8 @@
                 "type" => "simulation",
                 "mesh" => "missing_mesh",
                 "backend" => "main",
-                "tspan" => [0.0, 1.0],
-            )),
+                "tspan" => [0.0, 1.0]
+            ))
         )
         ctx = build_context(parse_input_deck(bad_problem_ref))
         msg = _error_message(() -> Flopsy.build_simulation(ctx))
@@ -141,8 +142,8 @@
                 "mesh" => "main",
                 "backend" => "main",
                 "ics" => ["bad"],
-                "tspan" => [0.0, 1.0],
-            )),
+                "tspan" => [0.0, 1.0]
+            ))
         )
         ctx = build_context(parse_input_deck(bad_species))
         msg = _error_message(() -> Flopsy.build_simulation(ctx))

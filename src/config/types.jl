@@ -55,18 +55,18 @@ struct InitialConditionConfig{T}
 end
 
 function InitialConditionConfig(
-    kind::Symbol,
-    amplitude::Union{Nothing, Real},
-    value::Union{Nothing, Real},
-    mobile_amplitude::Union{Nothing, Real},
-    mobile_value::Union{Nothing, Real},
-    trap_occupancy::Union{Nothing, Real})
+        kind::Symbol,
+        amplitude::Union{Nothing, Real},
+        value::Union{Nothing, Real},
+        mobile_amplitude::Union{Nothing, Real},
+        mobile_value::Union{Nothing, Real},
+        trap_occupancy::Union{Nothing, Real})
     vals = (
         amplitude,
         value,
         mobile_amplitude,
         mobile_value,
-        trap_occupancy,
+        trap_occupancy
     )
     T = promote_type(
         map(v -> v === nothing ? Float64 : typeof(v), vals)...,
@@ -77,7 +77,7 @@ function InitialConditionConfig(
         value,
         mobile_amplitude,
         mobile_value,
-        trap_occupancy,
+        trap_occupancy
     )
 end
 

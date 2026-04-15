@@ -58,7 +58,7 @@ Usage:
   flopsy xdmf <fields.h5> [--output out.xdmf]
 
 Generate an XDMF companion file for a Flopsy HDF5 field output.
-""",
+"""
 )
 
 """
@@ -131,14 +131,16 @@ end
 
 function _cli_run(args::Vector{String})
     _wants_help(args) && return _cli_command_usage("run")
-    length(args) == 1 || throw(ArgumentError("`flopsy run` expects exactly one input deck path."))
+    length(args) == 1 ||
+        throw(ArgumentError("`flopsy run` expects exactly one input deck path."))
     run_input_deck(args[1])
     return 0
 end
 
 function _cli_validate(args::Vector{String})
     _wants_help(args) && return _cli_command_usage("validate")
-    length(args) == 1 || throw(ArgumentError("`flopsy validate` expects exactly one input deck path."))
+    length(args) == 1 ||
+        throw(ArgumentError("`flopsy validate` expects exactly one input deck path."))
     validate_input_deck(args[1])
     println("valid")
     return 0
@@ -150,13 +152,15 @@ function _cli_syntax(args::Vector{String})
 
     sub = popfirst!(args)
     if sub == "list"
-        isempty(args) || throw(ArgumentError("`flopsy syntax list` does not accept extra arguments."))
+        isempty(args) ||
+            throw(ArgumentError("`flopsy syntax list` does not accept extra arguments."))
         for row in syntax_list()
             println("$(row[1])\t$(row[2])\tplugin=$(row[3])")
         end
         return 0
     elseif sub == "show"
-        length(args) == 2 || throw(ArgumentError("`flopsy syntax show` expects <domain> <type>."))
+        length(args) == 2 ||
+            throw(ArgumentError("`flopsy syntax show` expects <domain> <type>."))
         info = syntax_show(Symbol(args[1]), Symbol(args[2]))
         println("domain: ", info.domain)
         println("type: ", info.type_name)
@@ -171,7 +175,8 @@ function _cli_syntax(args::Vector{String})
             if param.kind == :vector
                 print("[", param.element_kind, "]")
             end
-            param.allowed_values === nothing || print(" allowed=", repr(param.allowed_values))
+            param.allowed_values === nothing ||
+                print(" allowed=", repr(param.allowed_values))
             println(" :: ", param.doc)
         end
         return 0
@@ -186,7 +191,8 @@ function _cli_plugin(args::Vector{String})
 
     sub = popfirst!(args)
     if sub == "list"
-        isempty(args) || throw(ArgumentError("`flopsy plugin list` does not accept extra arguments."))
+        isempty(args) ||
+            throw(ArgumentError("`flopsy plugin list` does not accept extra arguments."))
         for info in plugin_list()
             line = info.name * "\tsource=" * info.source
             !isempty(info.registry) && (line *= "\tregistry=" * info.registry)
@@ -197,7 +203,8 @@ function _cli_plugin(args::Vector{String})
     elseif sub == "register"
         return _cli_plugin_register(args)
     elseif sub == "remove"
-        length(args) == 1 || throw(ArgumentError("`flopsy plugin remove` expects exactly one plugin name."))
+        length(args) == 1 ||
+            throw(ArgumentError("`flopsy plugin remove` expects exactly one plugin name."))
         plugin_remove!(args[1])
         println("removed ", args[1])
         return 0

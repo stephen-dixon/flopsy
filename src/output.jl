@@ -222,17 +222,20 @@ function write_xdmf_for_flopsy_h5(h5_path::AbstractString, xdmf_path = nothing)
             println(io, "        <Time Value=\"$(Float64(tval))\"/>")
             println(io, "        <Topology TopologyType=\"1DSMesh\" NumberOfElements=\"$(nx)\"/>")
             println(io, "        <Geometry GeometryType=\"X\">")
-            println(io, "          <DataItem Format=\"HDF\" Dimensions=\"$(nx)\" NumberType=\"Float\" Precision=\"8\">$(h5_ref):/mesh/x</DataItem>")
+            println(io,
+                "          <DataItem Format=\"HDF\" Dimensions=\"$(nx)\" NumberType=\"Float\" Precision=\"8\">$(h5_ref):/mesh/x</DataItem>")
             println(io, "        </Geometry>")
             for name in field_names
                 println(io, "        <Attribute Name=\"$(name)\" AttributeType=\"Scalar\" Center=\"Node\">")
-                println(io, "          <DataItem ItemType=\"HyperSlab\" Dimensions=\"$(nx)\" Type=\"HyperSlab\">")
+                println(io,
+                    "          <DataItem ItemType=\"HyperSlab\" Dimensions=\"$(nx)\" Type=\"HyperSlab\">")
                 println(io, "            <DataItem Dimensions=\"3 2\" Format=\"XML\">")
                 println(io, "              $(it - 1) 0")
                 println(io, "              1 1")
                 println(io, "              1 $(nx)")
                 println(io, "            </DataItem>")
-                println(io, "            <DataItem Format=\"HDF\" Dimensions=\"$(nt) $(nx)\" NumberType=\"Float\" Precision=\"8\">$(h5_ref):/fields/$(name)</DataItem>")
+                println(io,
+                    "            <DataItem Format=\"HDF\" Dimensions=\"$(nt) $(nx)\" NumberType=\"Float\" Precision=\"8\">$(h5_ref):/fields/$(name)</DataItem>")
                 println(io, "          </DataItem>")
                 println(io, "        </Attribute>")
             end

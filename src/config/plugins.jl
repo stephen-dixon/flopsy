@@ -17,7 +17,8 @@ function ensure_plugin_environment()
     mkpath(env)
     project = joinpath(env, "Project.toml")
     if !isfile(project)
-        write(project, "name = \"FlopsyRuntimePlugins\"\nuuid = \"cb90c8ef-09af-4e3a-b1b5-d21c83d31990\"\nversion = \"0.1.0\"\n")
+        write(project,
+            "name = \"FlopsyRuntimePlugins\"\nuuid = \"cb90c8ef-09af-4e3a-b1b5-d21c83d31990\"\nversion = \"0.1.0\"\n")
     end
     state = plugin_state_file()
     if !isfile(state)
@@ -59,12 +60,13 @@ function plugin_list()
     out = NamedTuple[]
     for name in sort!(collect(keys(plugins)))
         info = plugins[name]
-        push!(out, (
-            name = name,
-            source = get(info, "source", ""),
-            registry = get(info, "registry", ""),
-            load_error = get(info, "load_error", ""),
-        ))
+        push!(out,
+            (
+                name = name,
+                source = get(info, "source", ""),
+                registry = get(info, "registry", ""),
+                load_error = get(info, "load_error", "")
+            ))
     end
     return out
 end
@@ -78,7 +80,8 @@ function plugin_register!(name::AbstractString; registry = nothing, url = nothin
     path !== nothing && !isdir(path) &&
         throw(ArgumentError("Plugin path does not exist or is not a directory: $(path)"))
     _with_plugin_env() do _
-        registry !== nothing && Pkg.Registry.add(Pkg.RegistrySpec(url = registry); io = devnull)
+        registry !== nothing &&
+            Pkg.Registry.add(Pkg.RegistrySpec(url = registry); io = devnull)
         if path !== nothing
             Pkg.develop(Pkg.PackageSpec(path = path); io = devnull)
         elseif url !== nothing
@@ -95,7 +98,7 @@ function plugin_register!(name::AbstractString; registry = nothing, url = nothin
     plugins[String(name)] = Dict(
         "source" => path !== nothing ? path : url !== nothing ? url : String(name),
         "registry" => registry === nothing ? "" : String(registry),
-        "load_error" => "",
+        "load_error" => ""
     )
     _write_plugin_state(state)
     return name

@@ -7,7 +7,7 @@ from a typed configuration.
 function build_problem(cfg::ProblemConfig)
     Base.depwarn(
         "`build_problem(::ProblemConfig)` is deprecated. Prefer the registry-driven path: `parse_input_deck` -> `build_context` -> `build_simulation`.",
-        :build_problem,
+        :build_problem
     )
     validate(cfg)
     template = _select_problem_template(cfg.problem_type)
@@ -82,14 +82,13 @@ Solve a config-built `SimulationProblem` and return a wrapped result.
 """
 function solve(problem::SimulationProblem)
     sol = solve_problem(problem.model, problem.u0, problem.tspan, problem.solver_config)
-    problem_type =
-        if hasproperty(problem.config, :problem_type)
-            getproperty(problem.config, :problem_type)
-        elseif hasproperty(problem.config, :type_name)
-            getproperty(problem.config, :type_name)
-        else
-            :simulation
-        end
+    problem_type = if hasproperty(problem.config, :problem_type)
+        getproperty(problem.config, :problem_type)
+    elseif hasproperty(problem.config, :type_name)
+        getproperty(problem.config, :type_name)
+    else
+        :simulation
+    end
     metadata = Dict{String, Any}(
         "problem_type" => string(problem_type),
         "algorithm" => string(typeof(problem.solver_config.algorithm)),
@@ -113,7 +112,7 @@ function run_simulation(config_path::AbstractString)
     end
     Base.depwarn(
         "`run_simulation(path)` on legacy typed configs is deprecated. The supported TOML workflow is the registry-driven input-deck system.",
-        :run_simulation,
+        :run_simulation
     )
     cfg = load_config(config_path)
     problem = build_problem(cfg)
@@ -204,7 +203,8 @@ function _apply_trapping_ic!(U0, cfg::ProblemConfig)
     if ic.kind == :uniform
         U0[1, :] .= something(ic.mobile_value, _get_parameter(cfg, :initial_mobile_uniform_value, 0.0))
     else
-        U0[1, cld(nx, 2)] = something(ic.mobile_amplitude, _get_parameter(cfg, :initial_mobile_pulse_amplitude, 1.0))
+        U0[1, cld(nx, 2)] = something(
+            ic.mobile_amplitude, _get_parameter(cfg, :initial_mobile_pulse_amplitude, 1.0))
     end
 
     return U0

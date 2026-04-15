@@ -14,7 +14,7 @@ create_app(
     BUILD_DIR;
     executables = ["flopsy" => "julia_main"],
     precompile_execution_file = joinpath(ROOT, "scripts", "precompile_app.jl"),
-    force = true,
+    force = true
 )
 
 println("Built app at ", BUILD_DIR)
