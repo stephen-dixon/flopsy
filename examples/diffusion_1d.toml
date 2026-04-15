@@ -1,0 +1,21 @@
+problem_type = "diffusion_1d"
+
+[mesh]
+kind = "uniform_1d"
+nx = 101
+xmin = 0.0
+xmax = 1.0
+
+[solver]
+formulation = "unsplit"
+algorithm = "Rodas5"
+abstol = 1e-8
+reltol = 1e-6
+saveat = [0.0, 0.5, 1.0]
+
+[parameters]
+t0 = 0.0
+tend = 1.0
+diffusion_coefficient = 0.1
+reaction_rate = 0.0
+initial_pulse_amplitude = 1.0

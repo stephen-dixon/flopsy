@@ -3,47 +3,52 @@ module Flopsy
 using LinearAlgebra
 using SparseArrays
 using ADTypes
-using TOML
 using SciMLBase
 using OrdinaryDiffEq
+using Sundials
 using HDF5
 using CSV
 using DataFrames
 using Printf
 using Dates
 
-include("types.jl")
-include("variables.jl")
-include("state.jl")
-include("mesh.jl")
-include("config.jl")
-include("temperature.jl")
-include("diffusion_coefficients.jl")
+include("core/types.jl")
+include("core/variables.jl")
+include("core/state.jl")
+include("core/mesh.jl")
+include("core/temperature.jl")
+include("core/diffusion_coefficients.jl")
 
-include("operators/operators.jl")
-include("operators/reaction.jl")
-include("operators/diffusion.jl")
-include("operators/constraints.jl")
-include("operators/composition.jl")
+include("core/operators.jl")
+include("core/reaction_operators.jl")
+include("core/diffusion_operators.jl")
+include("core/constraint_operators.jl")
+include("core/operator_composition.jl")
 
-include("formulations/formulations.jl")
-include("formulations/unsplit.jl")
-include("formulations/imex.jl")
-include("formulations/split.jl")
-include("formulations/residual.jl")
+include("core/formulations.jl")
+include("core/unsplit_formulation.jl")
+include("core/imex_formulation.jl")
+include("core/split_formulation.jl")
+include("core/residual_formulation.jl")
 
-include("solvers/solvers.jl")
-include("solvers/sciML_problem_builders.jl")
-include("solvers/time_integrators.jl")
+include("core/solver_api.jl")
+include("core/problem_builders.jl")
+include("core/time_integrators.jl")
 
-include("models/models.jl")
-include("models/generic_rd_model.jl")
-include("models/trapping_model.jl")
+include("core/models.jl")
+include("core/generic_rd_model.jl")
+include("core/trapping_model.jl")
+include("core/hotgates_adapter.jl")
 
-include("adapters/hotgates.jl")
+include("config/types.jl")
+include("config/parse.jl")
+include("config/validate.jl")
+include("problem_templates/diffusion_1d.jl")
+include("problem_templates/trapping_1d.jl")
+include("problem_templates/hotgates_trapping.jl")
+include("problem_factory/build_problem.jl")
 
 include("progress.jl")
-include("runner.jl")
 include("output.jl")
 include("plotting.jl")
 
@@ -60,7 +65,12 @@ export
     Mesh1D,
     SystemContext,
     SystemModel,
+    SimulationProblem,
     SolverConfig,
+    MeshConfig,
+    BoundaryConditionConfig,
+    InputSolverConfig,
+    ProblemConfig,
 
     nvariables,
     variable_names,
@@ -126,8 +136,11 @@ export
 
     build_problem,
     solve_problem,
+    solve,
 
     load_config,
+    parse_config,
+    validate,
     run_simulation,
 
     SimulationResult,

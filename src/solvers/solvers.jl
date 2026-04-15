@@ -18,8 +18,7 @@ function solve_problem(model::SystemModel, u0, tspan, solver_config::SolverConfi
         return solve_problem(prob, solver_config)
     else
         cb = CallbackSet(callbacks...)
-        # Merge callback into a one-off kwargs dict without mutating solver_config.
-        kw = merge(solver_config.kwargs, Dict{Symbol,Any}(:callback => cb))
+        kw = merge(solver_config.kwargs, (; callback = cb))
         tmp_config = SolverConfig(
             formulation          = solver_config.formulation,
             algorithm            = solver_config.algorithm,

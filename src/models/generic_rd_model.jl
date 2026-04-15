@@ -15,16 +15,29 @@ function build_rd_model(;
     diffusion::Union{AbstractOperator,Nothing}=nothing,
     boundary::Union{AbstractOperator,Nothing}=nothing,
     constraints::Union{AbstractOperator,Nothing}=nothing,
-    aux::Dict{Symbol,Any}=Dict{Symbol,Any}(),
+    aux=NamedTuple(),
+    scratch=nothing,
 )
     nx = length(mesh.x)
+    nstate = nvariables(layout) * nx
+    default_scratch = (
+        rhs_tmp = zeros(Float64, nstate),
+        implicit_rhs_tmp = zeros(Float64, nstate),
+    )
+    scratch_data = if scratch === nothing
+        default_scratch
+    elseif scratch isa NamedTuple
+        merge(default_scratch, scratch)
+    else
+        scratch
+    end
 
     ctx = SystemContext(
         layout,
         nx,
         mesh,
-        copy(aux),
-        Dict{Symbol,Any}(),
+        aux isa AbstractDict ? copy(aux) : aux,
+        scratch_data,
     )
 
     operators = (

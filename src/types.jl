@@ -38,6 +38,21 @@ struct RunInfo
 end
 
 """
+    SimulationProblem
+
+Typed container representing a fully assembled simulation ready to execute.
+This is the hand-off boundary between the config/problem-template layer and the
+core solver framework.
+"""
+struct SimulationProblem{M,U,T,S,C}
+    model::M
+    u0::U
+    tspan::T
+    solver_config::S
+    config::C
+end
+
+"""
     SystemContext
 
 Runtime context passed to every operator call.  Holds the mesh, node count,
@@ -74,17 +89,17 @@ Configuration for the time integrator.
 - `dt`          — initial step size hint (nothing = auto)
 - `kwargs`      — extra keyword arguments forwarded to `SciMLBase.solve`
 """
-Base.@kwdef struct SolverConfig
-    formulation::AbstractFormulation
-    algorithm
-    abstol::Float64 = 1e-8
-    reltol::Float64 = 1e-6
-    saveat = nothing
-    dt = nothing
+Base.@kwdef struct SolverConfig{F,A,AT,RT,S,D,K}
+    formulation::F
+    algorithm::A
+    abstol::AT = 1e-8
+    reltol::RT = 1e-6
+    saveat::S = nothing
+    dt::D = nothing
     show_progress::Bool = true
     show_solver_stats::Bool = true
     write_convergence_trace::Bool = false
-    kwargs::Dict{Symbol,Any} = Dict{Symbol,Any}()
+    kwargs::K = NamedTuple()
 end
 
 """

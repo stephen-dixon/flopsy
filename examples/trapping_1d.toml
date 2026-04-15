@@ -1,0 +1,23 @@
+problem_type = "trapping_1d"
+
+[mesh]
+kind = "uniform_1d"
+nx = 101
+xmin = 0.0
+xmax = 1.0
+
+[solver]
+formulation = "unsplit"
+algorithm = "Rodas5"
+abstol = 1e-8
+reltol = 1e-6
+saveat = [0.0, 0.25, 0.5, 0.75, 1.0]
+
+[parameters]
+t0 = 0.0
+tend = 1.0
+k_trap = 5.0
+k_detrap = 0.5
+diffusion_coefficient = 0.01
+initial_mobile_pulse_amplitude = 1.0
+initial_trap_occupancy = 0.0

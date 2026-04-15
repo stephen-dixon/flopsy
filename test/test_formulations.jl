@@ -102,6 +102,29 @@
         @test all(c_lie .>= -1e-10)
     end
 
+    @testset "SplitFormulation saveat interpolates off-step times" begin
+        model_i, u0_i, tspan_i = make_trapping_problem(t_end=2.0)
+        saveat_i = [0.0, 0.3, 0.9, 1.4, 2.0]
+        config_interp = SolverConfig(
+            formulation        = SplitFormulation(LieSplit()),
+            algorithm          = Rodas5(autodiff=AutoFiniteDiff()),
+            abstol             = 1e-9,
+            reltol             = 1e-7,
+            dt                 = 0.5,
+            saveat             = saveat_i,
+            show_progress      = false,
+            show_solver_stats  = false,
+        )
+
+        sol_interp = solve_problem(
+            build_problem(model_i, u0_i, tspan_i, SplitFormulation(LieSplit()), config_interp),
+            config_interp,
+        )
+
+        @test sol_interp.t == saveat_i
+        @test length(sol_interp.u) == length(saveat_i)
+    end
+
     # ------------------------------------------------------------------
     @testset "SplitFormulation(StrangSplit): higher accuracy than Lie" begin
         model4, u04, tspan4 = make_trapping_problem()

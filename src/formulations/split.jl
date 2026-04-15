@@ -93,7 +93,7 @@ function _solve_split(prob::SplitProblem, solver_config::SolverConfig, ::LieSpli
     react_op = isempty(react_ops) ? NullOperator() : OperatorSum(react_ops)
     diff_op  = isempty(diff_ops)  ? NullOperator() : OperatorSum(diff_ops)
 
-    saveat_set = _build_saveat_set(solver_config, t0, t_end)
+    saveat = _build_saveat_vector(solver_config, t0, t_end)
 
     t = t0
     u = copy(prob.u0)
@@ -101,17 +101,19 @@ function _solve_split(prob::SplitProblem, solver_config::SolverConfig, ::LieSpli
     saved_t = Float64[]
     saved_u = Vector{Float64}[]
 
-    _record!(saved_t, saved_u, t, u, saveat_set)
+    save_index = _record_initial!(saved_t, saved_u, t, u, saveat)
 
     while t < t_end - sqrt(eps(t_end))
         dt = min(Δt, t_end - t)
+        t_prev = t
+        u_prev = copy(u)
 
         # Lie: reaction sub-step → diffusion sub-step
         u = _solve_substep(react_op, ctx, u, t, dt, solver_config)
         u = _solve_substep(diff_op,  ctx, u, t, dt, solver_config)
 
         t += dt
-        _record!(saved_t, saved_u, t, u, saveat_set)
+        save_index = _record_interval!(saved_t, saved_u, t_prev, u_prev, t, u, saveat, save_index)
     end
 
     return SplitSolution(saved_t, saved_u, :Success)
@@ -130,7 +132,7 @@ function _solve_split(prob::SplitProblem, solver_config::SolverConfig, ::StrangS
     react_op = isempty(react_ops) ? NullOperator() : OperatorSum(react_ops)
     diff_op  = isempty(diff_ops)  ? NullOperator() : OperatorSum(diff_ops)
 
-    saveat_set = _build_saveat_set(solver_config, t0, t_end)
+    saveat = _build_saveat_vector(solver_config, t0, t_end)
 
     t = t0
     u = copy(prob.u0)
@@ -138,10 +140,12 @@ function _solve_split(prob::SplitProblem, solver_config::SolverConfig, ::StrangS
     saved_t = Float64[]
     saved_u = Vector{Float64}[]
 
-    _record!(saved_t, saved_u, t, u, saveat_set)
+    save_index = _record_initial!(saved_t, saved_u, t, u, saveat)
 
     while t < t_end - sqrt(eps(t_end))
         dt = min(Δt, t_end - t)
+        t_prev = t
+        u_prev = copy(u)
 
         # Strang: half reaction → full diffusion → half reaction
         u = _solve_substep(react_op, ctx, u, t,          dt / 2, solver_config)
@@ -149,7 +153,7 @@ function _solve_split(prob::SplitProblem, solver_config::SolverConfig, ::StrangS
         u = _solve_substep(react_op, ctx, u, t + dt / 2, dt / 2, solver_config)
 
         t += dt
-        _record!(saved_t, saved_u, t, u, saveat_set)
+        save_index = _record_interval!(saved_t, saved_u, t_prev, u_prev, t, u, saveat, save_index)
     end
 
     return SplitSolution(saved_t, saved_u, :Success)
@@ -191,27 +195,56 @@ end
 # Utility helpers
 # ---------------------------------------------------------------------------
 
-"""Return a Set of save times within [t0, t_end] from solver_config.saveat."""
-function _build_saveat_set(solver_config::SolverConfig, t0::Float64, t_end::Float64)
+"""Return a sorted save-time vector within [t0, t_end] from solver_config.saveat."""
+function _build_saveat_vector(solver_config::SolverConfig, t0::Float64, t_end::Float64)
     saveat = solver_config.saveat
-    saveat === nothing && return Set{Float64}()
-    return Set{Float64}(filter(s -> t0 <= s <= t_end, saveat))
+    saveat === nothing && return Float64[]
+    return sort!(Float64[s for s in saveat if t0 <= s <= t_end])
 end
 
-"""Record (t, u) if t matches a save time or no explicit saveat is given."""
-function _record!(saved_t, saved_u, t::Float64, u::Vector{Float64},
-                  saveat_set::Set{Float64})
-    should_save = if isempty(saveat_set)
-        true
-    else
-        any(s -> abs(t - s) <= sqrt(eps(max(abs(t), abs(s), 1.0))), saveat_set)
+function _record_initial!(saved_t, saved_u, t::Float64, u::Vector{Float64}, saveat::Vector{Float64})
+    if isempty(saveat)
+        push!(saved_t, t)
+        push!(saved_u, copy(u))
+        return 1
     end
 
-    if should_save
-        # Avoid duplicate entries (e.g. t0 recorded twice at loop boundary).
-        if isempty(saved_t) || saved_t[end] != t
-            push!(saved_t, t)
-            push!(saved_u, copy(u))
-        end
+    idx = 1
+    while idx <= length(saveat) && _is_close_time(saveat[idx], t)
+        push!(saved_t, saveat[idx])
+        push!(saved_u, copy(u))
+        idx += 1
     end
+    return idx
 end
+
+function _record_interval!(saved_t, saved_u, t0::Float64, u0::Vector{Float64},
+                           t1::Float64, u1::Vector{Float64}, saveat::Vector{Float64},
+                           idx::Int)
+    if isempty(saveat)
+        push!(saved_t, t1)
+        push!(saved_u, copy(u1))
+        return idx
+    end
+
+    while idx <= length(saveat)
+        ts = saveat[idx]
+        ts < t0 && (idx += 1; continue)
+        ts > t1 && break
+        push!(saved_t, ts)
+        push!(saved_u, _interpolate_state(u0, u1, t0, t1, ts))
+        idx += 1
+    end
+
+    return idx
+end
+
+function _interpolate_state(u0::Vector{Float64}, u1::Vector{Float64},
+                            t0::Float64, t1::Float64, t::Float64)
+    _is_close_time(t, t0) && return copy(u0)
+    _is_close_time(t, t1) && return copy(u1)
+    α = (t - t0) / (t1 - t0)
+    return (1 - α) .* u0 .+ α .* u1
+end
+
+_is_close_time(a::Float64, b::Float64) = abs(a - b) <= sqrt(eps(max(abs(a), abs(b), 1.0)))

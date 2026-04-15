@@ -35,10 +35,10 @@ function build_trapping_model(;
     mesh::Mesh1D,
     k_trap::Real,
     k_detrap::Real,
-    diffusion_coefficient::Real,
+    diffusion_coefficient,
     mobile_name::Symbol=:c,
     trap_name::Symbol=:theta,
-    aux::Dict{Symbol,Any}=Dict{Symbol,Any}(),
+    aux=NamedTuple(),
 )
     layout = trapping_variable_layout(
         mobile_name=mobile_name,
@@ -57,8 +57,15 @@ function build_trapping_model(;
 
     selector(layout::VariableLayout) = variables_with_tag(layout, :diffusion)
 
-    coeffs = zeros(Float64, nvariables(layout))
-    coeffs[mobile_idx] = diffusion_coefficient
+    coeffs = if diffusion_coefficient isa Real
+        ConstantDiffusion([Float64(diffusion_coefficient), 0.0])
+    elseif diffusion_coefficient isa AbstractDiffusionCoefficients
+        diffusion_coefficient
+    elseif diffusion_coefficient isa AbstractVector
+        ConstantDiffusion(Float64.(diffusion_coefficient))
+    else
+        throw(ArgumentError("Unsupported diffusion_coefficient type $(typeof(diffusion_coefficient))"))
+    end
 
     diffusion = LinearDiffusionOperator(coeffs, selector, nothing)
 

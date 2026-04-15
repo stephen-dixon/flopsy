@@ -24,9 +24,7 @@ supports_jacobian(op::OperatorSum) = all(supports_jacobian, op.ops)
 function rhs!(du, op::OperatorSum, u, ctx, t)
     fill!(du, zero(eltype(du)))
 
-    tmp = get!(ctx.scratch, :rhs_tmp) do
-        similar(du)
-    end
+    tmp = _scratch_buffer(ctx.scratch, :rhs_tmp, du)
 
     for subop in op.ops
         supports_rhs(subop) || continue
@@ -41,9 +39,7 @@ end
 function implicit_rhs!(du, op::OperatorSum, u, ctx, t)
     fill!(du, zero(eltype(du)))
 
-    tmp = get!(ctx.scratch, :implicit_rhs_tmp) do
-        similar(du)
-    end
+    tmp = _scratch_buffer(ctx.scratch, :implicit_rhs_tmp, du)
 
     for subop in op.ops
         supports_implicit_rhs(subop) || continue
@@ -53,6 +49,20 @@ function implicit_rhs!(du, op::OperatorSum, u, ctx, t)
     end
 
     return du
+end
+
+function _scratch_buffer(scratch::AbstractDict, key::Symbol, prototype)
+    return get!(scratch, key) do
+        similar(prototype)
+    end
+end
+
+function _scratch_buffer(scratch::NamedTuple, key::Symbol, prototype)
+    if hasproperty(scratch, key)
+        value = getproperty(scratch, key)
+        value === nothing || return value
+    end
+    return similar(prototype)
 end
 
 function jacobian!(J, op::OperatorSum, u, ctx, t)

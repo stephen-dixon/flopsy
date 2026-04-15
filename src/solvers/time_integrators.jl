@@ -4,18 +4,45 @@
 Run a SciML ODE/DAE problem with the parameters from `solver_config`.
 """
 function solve_problem(prob::SciMLBase.AbstractODEProblem, solver_config::SolverConfig)
-    kwargs = copy(solver_config.kwargs)
+    kwargs = solver_config.kwargs
 
-    solver_config.saveat !== nothing && (kwargs[:saveat] = solver_config.saveat)
-    solver_config.dt !== nothing && (kwargs[:dt] = solver_config.dt)
-
-    return SciMLBase.solve(
-        prob,
-        solver_config.algorithm;
-        abstol = solver_config.abstol,
-        reltol = solver_config.reltol,
-        kwargs...,
-    )
+    if solver_config.saveat !== nothing && solver_config.dt !== nothing
+        return SciMLBase.solve(
+            prob,
+            solver_config.algorithm;
+            abstol = solver_config.abstol,
+            reltol = solver_config.reltol,
+            saveat = solver_config.saveat,
+            dt = solver_config.dt,
+            kwargs...,
+        )
+    elseif solver_config.saveat !== nothing
+        return SciMLBase.solve(
+            prob,
+            solver_config.algorithm;
+            abstol = solver_config.abstol,
+            reltol = solver_config.reltol,
+            saveat = solver_config.saveat,
+            kwargs...,
+        )
+    elseif solver_config.dt !== nothing
+        return SciMLBase.solve(
+            prob,
+            solver_config.algorithm;
+            abstol = solver_config.abstol,
+            reltol = solver_config.reltol,
+            dt = solver_config.dt,
+            kwargs...,
+        )
+    else
+        return SciMLBase.solve(
+            prob,
+            solver_config.algorithm;
+            abstol = solver_config.abstol,
+            reltol = solver_config.reltol,
+            kwargs...,
+        )
+    end
 end
 
 """

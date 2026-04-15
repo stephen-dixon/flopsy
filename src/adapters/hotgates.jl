@@ -53,6 +53,32 @@ struct HotgatesReactionOperator{M,A,T} <: AbstractReactionOperator
     temperature::T
 end
 
+struct HotgatesWorkspace{T}
+    mobile::Vector{T}
+    trapped::Vector{T}
+    dmobile::Vector{T}
+    dtrapped::Vector{T}
+    mobile_fd::Vector{T}
+    trapped_fd::Vector{T}
+    dmobile_fd::Vector{T}
+    dtrapped_fd::Vector{T}
+    J_local::Matrix{T}
+end
+
+function HotgatesWorkspace(nmobile::Int, ntrapped::Int, nvars::Int)
+    return HotgatesWorkspace(
+        zeros(Float64, nmobile),
+        zeros(Float64, ntrapped),
+        zeros(Float64, nmobile),
+        zeros(Float64, ntrapped),
+        zeros(Float64, nmobile),
+        zeros(Float64, ntrapped),
+        zeros(Float64, nmobile),
+        zeros(Float64, ntrapped),
+        zeros(Float64, nvars, nvars),
+    )
+end
+
 supports_rhs(::HotgatesReactionOperator) = true
 
 # jacobian! support is backend-dependent.  The Palioxis extension overrides
@@ -152,6 +178,9 @@ function build_hotgates_trapping_model(;
 
     selector(layout::VariableLayout) = variables_with_tag(layout, :diffusion)
     diffusion = LinearDiffusionOperator(collect(diffusion_coefficients), selector, nothing)
+    scratch = (
+        hotgates = HotgatesWorkspace(length(adaptor.mobile_indices), length(adaptor.trap_indices), nvariables(layout)),
+    )
 
     return build_rd_model(
         layout = layout,
@@ -159,6 +188,7 @@ function build_hotgates_trapping_model(;
         reaction = reaction,
         diffusion = diffusion,
         boundary = boundary,
+        scratch = scratch,
     )
 end
 
@@ -173,44 +203,50 @@ by perturbing each input.  The Palioxis extension overrides this for
 `Palioxis.MultipleDefectModel` using the analytic `time_derivatives_jacobian`.
 """
 function hotgates_jacobian!(J_local, model, adaptor::HotgatesTrappingAdaptor,
-                             mobile, defects, trapped, T)
+                             mobile, defects, trapped, T, workspace::HotgatesWorkspace)
     # Default: finite-difference fallback using hotgates_rates!
     nm   = length(adaptor.mobile_indices)
     nt   = length(adaptor.trap_indices)
-    nvars = nm + nt
+    fill!(J_local, 0.0)
+    fill!(workspace.mobile_fd, 0.0)
+    fill!(workspace.trapped_fd, 0.0)
+    fill!(workspace.dmobile_fd, 0.0)
+    fill!(workspace.dtrapped_fd, 0.0)
 
-    dm0  = zeros(Float64, nm)
-    dt0  = zeros(Float64, nt)
-    dmh  = zeros(Float64, nm)
-    dth  = zeros(Float64, nt)
-
-    hotgates_rates!(dm0, dt0, model, mobile, defects, trapped, T)
+    hotgates_rates!(workspace.dmobile_fd, workspace.dtrapped_fd, model, mobile, defects, trapped, T)
 
     eps = 1e-7
-    all_vars = vcat(adaptor.mobile_indices, adaptor.trap_indices)
-    all_vals = vcat(mobile, trapped)
+    copyto!(workspace.mobile_fd, mobile)
+    copyto!(workspace.trapped_fd, trapped)
 
-    for (j, idx) in enumerate(all_vars)
-        h   = eps * max(1.0, abs(all_vals[j]))
-        mob_p = copy(mobile)
-        trp_p = copy(trapped)
-
-        if idx in adaptor.mobile_indices
-            jm = findfirst(==(idx), adaptor.mobile_indices)
-            mob_p[jm] += h
-        else
-            jt = findfirst(==(idx), adaptor.trap_indices)
-            trp_p[jt] += h
+    for (j, idx) in enumerate(adaptor.mobile_indices)
+        h = eps * max(1.0, abs(mobile[j]))
+        workspace.mobile_fd[j] += h
+        fill!(workspace.dmobile, 0.0)
+        fill!(workspace.dtrapped, 0.0)
+        hotgates_rates!(workspace.dmobile, workspace.dtrapped, model, workspace.mobile_fd, defects, workspace.trapped_fd, T)
+        for i in eachindex(adaptor.mobile_indices)
+            J_local[adaptor.mobile_indices[i], idx] += (workspace.dmobile[i] - workspace.dmobile_fd[i]) / h
         end
-
-        hotgates_rates!(dmh, dth, model, mob_p, defects, trp_p, T)
-
-        for (i, midx) in enumerate(adaptor.mobile_indices)
-            J_local[midx, idx] += (dmh[i] - dm0[i]) / h
+        for i in eachindex(adaptor.trap_indices)
+            J_local[adaptor.trap_indices[i], idx] += (workspace.dtrapped[i] - workspace.dtrapped_fd[i]) / h
         end
-        for (i, tidx) in enumerate(adaptor.trap_indices)
-            J_local[tidx, idx] += (dth[i] - dt0[i]) / h
+        workspace.mobile_fd[j] -= h
+    end
+
+    for (j, idx) in enumerate(adaptor.trap_indices)
+        h = eps * max(1.0, abs(trapped[j]))
+        workspace.trapped_fd[j] += h
+        fill!(workspace.dmobile, 0.0)
+        fill!(workspace.dtrapped, 0.0)
+        hotgates_rates!(workspace.dmobile, workspace.dtrapped, model, workspace.mobile_fd, defects, workspace.trapped_fd, T)
+        for i in eachindex(adaptor.mobile_indices)
+            J_local[adaptor.mobile_indices[i], idx] += (workspace.dmobile[i] - workspace.dmobile_fd[i]) / h
         end
+        for i in eachindex(adaptor.trap_indices)
+            J_local[adaptor.trap_indices[i], idx] += (workspace.dtrapped[i] - workspace.dtrapped_fd[i]) / h
+        end
+        workspace.trapped_fd[j] -= h
     end
 
     return J_local
@@ -246,15 +282,16 @@ Extracts mobile and trapped concentrations from the node state, calls
 the node residual.  Defect concentrations are taken from `adaptor.defects[:, ix]`.
 """
 function local_rhs!(du_local, u_local, model, adaptor::HotgatesTrappingAdaptor, ctx, t, ix, T)
-    nm = length(adaptor.mobile_indices)
-    nt = length(adaptor.trap_indices)
     nd = size(adaptor.defects, 1)
+    workspace = _hotgates_workspace(ctx.scratch, adaptor, length(u_local))
+    mobile = workspace.mobile
+    trapped = workspace.trapped
+    dmobile = workspace.dmobile
+    dtrapped = workspace.dtrapped
+    defects = nd > 0 ? adaptor.defects[:, ix] : view(adaptor.defects, :, ix)
 
-    mobile  = similar(u_local, nm)
-    trapped = similar(u_local, nt)
-    defects = nd > 0 ? adaptor.defects[:, ix] : similar(u_local, 0)
-    dmobile  = similar(u_local, nm)
-    dtrapped = similar(u_local, nt)
+    fill!(dmobile, 0.0)
+    fill!(dtrapped, 0.0)
 
     @inbounds for (j, idx) in enumerate(adaptor.mobile_indices)
         mobile[j] = u_local[idx]
@@ -295,20 +332,21 @@ function jacobian!(J, op::HotgatesReactionOperator, u, ctx::SystemContext, t)
     @inbounds for ix in 1:nx
         u_local = node_view(U, ix)
         T = temperature_at(op.temperature, ctx, t, ix)
-
-        nm = length(op.adaptor.mobile_indices)
-        nt = length(op.adaptor.trap_indices)
         nd = size(op.adaptor.defects, 1)
-
-        mobile  = [u_local[i] for i in op.adaptor.mobile_indices]
-        trapped = [u_local[i] for i in op.adaptor.trap_indices]
+        workspace = _hotgates_workspace(ctx.scratch, op.adaptor, nvars)
+        mobile = workspace.mobile
+        trapped = workspace.trapped
         defects = nd > 0 ? op.adaptor.defects[:, ix] : Float64[]
 
         offset = (ix - 1) * nvars
-
-        # Build a local (nvars × nvars) block and accumulate via hotgates_jacobian!
-        J_local = zeros(Float64, nvars, nvars)
-        hotgates_jacobian!(J_local, op.model, op.adaptor, mobile, defects, trapped, T)
+        for (j, idx) in enumerate(op.adaptor.mobile_indices)
+            mobile[j] = u_local[idx]
+        end
+        for (j, idx) in enumerate(op.adaptor.trap_indices)
+            trapped[j] = u_local[idx]
+        end
+        J_local = workspace.J_local
+        hotgates_jacobian!(J_local, op.model, op.adaptor, mobile, defects, trapped, T, workspace)
 
         for c in 1:nvars, r in 1:nvars
             J[offset + r, offset + c] += J_local[r, c]
@@ -316,6 +354,19 @@ function jacobian!(J, op::HotgatesReactionOperator, u, ctx::SystemContext, t)
     end
 
     return J
+end
+
+function _hotgates_workspace(scratch::AbstractDict, adaptor::HotgatesTrappingAdaptor, nvars::Int)
+    return get!(scratch, :hotgates) do
+        HotgatesWorkspace(length(adaptor.mobile_indices), length(adaptor.trap_indices), nvars)
+    end
+end
+
+function _hotgates_workspace(scratch::NamedTuple, adaptor::HotgatesTrappingAdaptor, nvars::Int)
+    if hasproperty(scratch, :hotgates)
+        return getproperty(scratch, :hotgates)
+    end
+    return HotgatesWorkspace(length(adaptor.mobile_indices), length(adaptor.trap_indices), nvars)
 end
 
 
