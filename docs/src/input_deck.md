@@ -11,6 +11,7 @@ Each input deck is composed of named blocks grouped under fixed top-level domain
 - `ic`
 - `bc`
 - `output`
+- `temperature` *(optional — required for TDS workflows)*
 - `problem`
 
 Each block must declare a `type` that matches a registered syntax entry in the live `SyntaxRegistry`.
@@ -61,6 +62,86 @@ saveat = [0.0, 0.25, 0.5, 0.75, 1.0]
 ```
 
 The `[problem.<name>]` block references previously defined objects by name.
+
+## Temperature Providers
+
+Temperature models are declared as named `[temperature.<name>]` blocks and referenced from
+`[problem.<name>]` via the `temperature` field.
+
+```toml
+[temperature.ramp]
+type = "linear_ramp"
+T0 = 300.0
+rate = 0.5          # K/s
+
+[problem.tds_run]
+type = "tds"
+mesh = "main"
+backend = "main"
+temperature = "ramp"
+tspan = [0.0, 700.0]
+dt = 1.0
+```
+
+Built-in temperature types:
+
+| type | description |
+|------|-------------|
+| `constant` | Uniform temperature (`value` in K) |
+| `linear_ramp` | T(t) = T0 + rate × t (`T0` K, `rate` K/s) |
+| `piecewise` | Hold/ramp stages (see `stages` array) |
+
+## Output Types
+
+| type | description |
+|------|-------------|
+| `hdf5` | Full pointwise field output (`file`, optional `xdmf`) |
+| `summary_csv` | Time-series scalars: integrals, surface fluxes (`file`, optional `fields` list) |
+
+Example combining both:
+
+```toml
+[output.fields]
+type = "hdf5"
+file = "result.h5"
+xdmf = true          # or "result.xdmf" for explicit path
+
+[output.summary]
+type = "summary_csv"
+file = "summary.csv"
+```
+
+## TDS Problem Class
+
+`type = "tds"` is a dedicated problem class for thermal desorption spectroscopy workflows.
+It requires a `temperature` reference and defaults to `formulation = "split"`.
+
+```toml
+[problem.desorption]
+type = "tds"
+mesh = "main"
+backend = "main"
+temperature = "ramp"
+ics = ["loaded"]
+bcs = ["vacuum_left", "vacuum_right"]
+outputs = ["fields", "summary"]
+tspan = [0.0, 700.0]
+formulation = "split"
+split_method = "strang"   # or "lie"
+dt = 1.0
+saveat = ...
+```
+
+## Solver Options
+
+| field | description |
+|-------|-------------|
+| `formulation` | `unsplit`, `imex`, `imex_reaction`, `split`, `residual` |
+| `split_method` | `strang` (default) or `lie` — only used when `formulation = "split"` |
+| `algorithm` | `Rodas5`, `Rodas5P`, `KenCarp4`, `CVODE_BDF` |
+| `dt` | Required for `split` formulation (macro step size) |
+| `abstol` | Absolute tolerance (default 1e-8) |
+| `reltol` | Relative tolerance (default 1e-6) |
 
 ## Validation Rules
 

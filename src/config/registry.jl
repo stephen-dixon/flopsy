@@ -1,5 +1,5 @@
 const _PLUGIN_PROVIDERS = Dict{Symbol, Function}()
-const _CONFIG_DOMAINS = (:mesh, :backend, :ic, :bc, :output, :problem)
+const _CONFIG_DOMAINS = (:mesh, :backend, :ic, :bc, :output, :temperature, :problem)
 
 struct ConfigValidationError <: Exception
     message::String
@@ -243,6 +243,8 @@ function _store_built_object!(ctx::BuildContext, domain::Symbol, name::Symbol, o
         ctx.bcs
     elseif domain == :output
         ctx.outputs
+    elseif domain == :temperature
+        ctx.temperatures
     elseif domain == :problem
         ctx.problems
     else

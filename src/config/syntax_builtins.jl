@@ -4,6 +4,7 @@ function register_builtin_syntax!(registry::SyntaxRegistry)
     _register_ic_syntax!(registry)
     _register_bc_syntax!(registry)
     _register_output_syntax!(registry)
+    _register_temperature_syntax!(registry)
     _register_problem_syntax!(registry)
     return registry
 end
@@ -205,90 +206,208 @@ function _register_output_syntax!(registry::SyntaxRegistry)
             :hdf5,
             [
                 ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
-                ParameterSpec(:file, true, nothing, "Output HDF5 file"; kind = :string),
-                ParameterSpec(:xdmf, false, false, "Generate XDMF companion"; kind = :bool),
-                ParameterSpec(
-                    :summary_csv, false, "", "Optional summary CSV path"; kind = :string)
+                ParameterSpec(:file, true, nothing, "Output HDF5 file path"; kind = :string),
+                ParameterSpec(:xdmf, false, false,
+                    "XDMF companion: false/true (auto path) or explicit string path";
+                    kind = :any)
             ],
-            "HDF5 field output with optional XDMF companion generation.",
+            "HDF5 pointwise field output with optional XDMF companion for ParaView.",
             (data, ctx, reg, block) -> nothing,
-            (data,
-                ctx,
-                reg,
-                block) -> OutputDefinition(
+            (data, ctx, reg, block) -> begin
+                h5_file = String(data["file"])
+                xdmf_raw = data["xdmf"]
+                xdmf_path = if xdmf_raw isa AbstractString && !isempty(xdmf_raw)
+                    String(xdmf_raw)
+                elseif xdmf_raw === true
+                    replace(h5_file, r"\.h5$" => ".xdmf")
+                else
+                    nothing
+                end
+                OutputDefinition(block.name, block.type_name, h5_file, xdmf_path, String[])
+            end,
+            :builtin
+        ))
+
+    register_syntax!(registry,
+        SyntaxSpec(
+            :output,
+            :summary_csv,
+            [
+                ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+                ParameterSpec(:file, true, nothing, "Output CSV file path"; kind = :string),
+                ParameterSpec(:fields, false, String[],
+                    "Scalar columns to include (empty = all available)";
+                    kind = :vector, element_kind = :string)
+            ],
+            "Summary/derived scalar output written as CSV (time, integrals, surface fluxes).",
+            (data, ctx, reg, block) -> nothing,
+            (data, ctx, reg, block) -> OutputDefinition(
                 block.name,
                 block.type_name,
                 String(data["file"]),
-                Bool(data["xdmf"])
+                nothing,
+                String.(data["fields"])
             ),
             :builtin
         ))
 end
 
+function _register_temperature_syntax!(registry::SyntaxRegistry)
+    register_syntax!(registry,
+        SyntaxSpec(
+            :temperature,
+            :constant,
+            [
+                ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+                ParameterSpec(:value, true, nothing, "Temperature in Kelvin"; kind = :real)
+            ],
+            "Constant (spatially and temporally uniform) temperature provider.",
+            (data, ctx, reg, block) -> nothing,
+            (data, ctx, reg, block) -> ConstantTemperature(Float64(data["value"])),
+            :builtin
+        ))
+
+    register_syntax!(registry,
+        SyntaxSpec(
+            :temperature,
+            :linear_ramp,
+            [
+                ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+                ParameterSpec(:T0, true, nothing, "Initial temperature in K"; kind = :real),
+                ParameterSpec(:rate, true, nothing,
+                    "Ramp rate in K/s (typical TDS: 0.5–5 K/s)"; kind = :real)
+            ],
+            "Linearly ramping temperature: T(t) = T0 + rate * t. Standard TDS protocol.",
+            (data, ctx, reg, block) -> begin
+                Float64(data["T0"]) > 0 ||
+                    throw(ConfigValidationError("Block [temperature.$(block.name)] field `T0` must be positive"))
+            end,
+            (data, ctx, reg, block) -> LinearRampTemperature(Float64(data["T0"]), Float64(data["rate"])),
+            :builtin
+        ))
+
+    register_syntax!(registry,
+        SyntaxSpec(
+            :temperature,
+            :piecewise,
+            [
+                ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
+                ParameterSpec(:stages, true, nothing,
+                    "Array of stage dicts (type, T/rate, duration)"; kind = :any)
+            ],
+            "Piecewise-linear temperature profile built from hold/ramp stages.",
+            (data, ctx, reg, block) -> begin
+                stages = data["stages"]
+                stages isa AbstractVector ||
+                    throw(ConfigValidationError("Block [temperature.$(block.name)] field `stages` must be an array"))
+                isempty(stages) &&
+                    throw(ConfigValidationError("Block [temperature.$(block.name)] field `stages` must be non-empty"))
+            end,
+            (data, ctx, reg, block) -> PiecewiseTemperature(data["stages"]),
+            :builtin
+        ))
+end
+
 function _register_problem_syntax!(registry::SyntaxRegistry)
-    params = [
+    shared_params = [
         ParameterSpec(:type, true, nothing, "Syntax type"; kind = :string),
-        ParameterSpec(:mesh, true, nothing, "Referenced mesh object"; kind = :string),
-        ParameterSpec(:backend, true, nothing, "Referenced backend object"; kind = :string),
-        ParameterSpec(:ics, false, String[], "Referenced IC objects";
+        ParameterSpec(:mesh, true, nothing, "Referenced mesh block name"; kind = :string),
+        ParameterSpec(:backend, true, nothing, "Referenced backend block name"; kind = :string),
+        ParameterSpec(:ics, false, String[], "Referenced IC block names";
             kind = :vector, element_kind = :string),
-        ParameterSpec(:bcs, false, String[], "Referenced BC objects";
+        ParameterSpec(:bcs, false, String[], "Referenced BC block names";
             kind = :vector, element_kind = :string),
-        ParameterSpec(:outputs, false, String[], "Referenced output objects";
+        ParameterSpec(:outputs, false, String[], "Referenced output block names";
             kind = :vector, element_kind = :string),
-        ParameterSpec(:tspan, true, nothing, "Two-element time span";
+        ParameterSpec(:temperature, false, nothing,
+            "Referenced temperature block name (required for TDS)"; kind = :string),
+        ParameterSpec(:tspan, true, nothing, "Two-element time span [t0, t_end]";
             kind = :vector, element_kind = :real),
         ParameterSpec(:formulation, false, "unsplit", "Solver formulation"; kind = :string,
             allowed_values = ["unsplit", "imex", "imex_reaction", "split", "residual"]),
+        ParameterSpec(:split_method, false, "strang",
+            "Operator-splitting scheme when formulation = \"split\"";
+            kind = :string, allowed_values = ["strang", "lie"]),
         ParameterSpec(:algorithm, false, "Rodas5", "Solver algorithm"; kind = :string,
             allowed_values = ["Rodas5", "Rodas5P", "KenCarp4", "CVODE_BDF"]),
         ParameterSpec(:abstol, false, 1e-8, "Absolute tolerance"; kind = :real),
         ParameterSpec(:reltol, false, 1e-6, "Relative tolerance"; kind = :real),
         ParameterSpec(
             :saveat, false, nothing, "Save times"; kind = :vector, element_kind = :real),
-        ParameterSpec(:dt, false, nothing, "Fixed/split time step"; kind = :real)
+        ParameterSpec(:dt, false, nothing,
+            "Macro time-step size (required for formulation = \"split\")"; kind = :real)
     ]
+
+    _build_problem_def = (data, ctx, reg, block) -> ProblemDefinition(
+        block.name,
+        block.type_name,
+        Symbol(data["mesh"]),
+        Symbol(data["backend"]),
+        Symbol.(get(data, "ics", String[])),
+        Symbol.(get(data, "bcs", String[])),
+        Symbol.(get(data, "outputs", String[])),
+        get(data, "temperature", nothing) !== nothing ?
+            Symbol(data["temperature"]) : nothing,
+        (Float64(data["tspan"][1]), Float64(data["tspan"][2])),
+        InputSolverConfig(
+            Symbol(lowercase(String(data["formulation"]))),
+            Symbol(data["algorithm"]),
+            get(data, "dt", nothing) === nothing ? nothing : Float64(data["dt"]),
+            Float64(data["abstol"]),
+            Float64(data["reltol"]),
+            get(data, "saveat", nothing) === nothing ? nothing : Float64.(data["saveat"]),
+            Symbol(lowercase(String(data["split_method"])))
+        )
+    )
+
+    _validate_simulation = (data, ctx, reg, block) -> begin
+        length(data["tspan"]) == 2 ||
+            throw(ConfigValidationError("Block [problem.$(block.name)] field `tspan` must contain exactly two values"))
+    end
 
     for type_name in (:simulation, :diffusion_1d, :trapping_1d, :hotgates_trapping)
         register_syntax!(registry,
             SyntaxSpec(
                 :problem,
                 type_name,
-                params,
+                shared_params,
                 "Simulation assembly block referencing named mesh/backend/ic/bc/output objects.",
-                (data,
-                    ctx,
-                    reg,
-                    block) -> begin
-                    length(data["tspan"]) == 2 ||
-                        throw(ConfigValidationError("Block [problem.$(block.name)] field `tspan` must contain exactly two values"))
-                end,
-                (data,
-                    ctx,
-                    reg,
-                    block) -> ProblemDefinition(
-                    block.name,
-                    block.type_name,
-                    Symbol(data["mesh"]),
-                    Symbol(data["backend"]),
-                    Symbol.(get(data, "ics", String[])),
-                    Symbol.(get(data, "bcs", String[])),
-                    Symbol.(get(data, "outputs", String[])),
-                    (Float64(data["tspan"][1]), Float64(data["tspan"][2])),
-                    InputSolverConfig(
-                        Symbol(lowercase(String(data["formulation"]))),
-                        Symbol(data["algorithm"]),
-                        get(data, "dt", nothing) === nothing ? nothing :
-                        Float64(data["dt"]),
-                        Float64(data["abstol"]),
-                        Float64(data["reltol"]),
-                        get(data, "saveat", nothing) === nothing ? nothing :
-                        Float64.(data["saveat"])
-                    )
-                ),
+                _validate_simulation,
+                _build_problem_def,
                 :builtin
             ))
     end
+
+    # TDS problem class: like simulation but requires temperature and defaults to split
+    tds_params = map(shared_params) do p
+        if p.name == :formulation
+            ParameterSpec(:formulation, false, "split", "Solver formulation (default: split for TDS)";
+                kind = :string, allowed_values = ["unsplit", "imex", "imex_reaction", "split", "residual"])
+        elseif p.name == :temperature
+            ParameterSpec(:temperature, true, nothing,
+                "Referenced temperature block name (required for TDS)"; kind = :string)
+        elseif p.name == :split_method
+            ParameterSpec(:split_method, false, "strang",
+                "Operator-splitting scheme (strang or lie)";
+                kind = :string, allowed_values = ["strang", "lie"])
+        else
+            p
+        end
+    end
+
+    register_syntax!(registry,
+        SyntaxSpec(
+            :problem,
+            :tds,
+            tds_params,
+            "TDS (thermal desorption spectroscopy) problem class. Requires a [temperature.*] block and defaults to operator-splitting formulation.",
+            (data, ctx, reg, block) -> begin
+                length(data["tspan"]) == 2 ||
+                    throw(ConfigValidationError("Block [problem.$(block.name)] field `tspan` must contain exactly two values"))
+            end,
+            _build_problem_def,
+            :builtin
+        ))
 end
 
 function _build_diffusion_backend(name::Symbol, data::Dict{String, Any})
@@ -296,7 +415,7 @@ function _build_diffusion_backend(name::Symbol, data::Dict{String, Any})
     species = [SpeciesInfo(
         species_name, :field, :diffusive, 1, "Primary diffusive field", true)]
 
-    build_model = function (mesh, bcs)
+    build_model = function (mesh, bcs, temperature)
         layout = VariableLayout([VariableInfo(species_name, :field, Set([
             :diffusion, :reaction]))])
         selector(layout::VariableLayout) = [1]
@@ -325,7 +444,7 @@ function _build_trapping_backend(name::Symbol, data::Dict{String, Any})
             trapped_name, :trapped, :stationary, 2, "Trapped stationary species", false)
     ]
 
-    build_model = function (mesh, bcs)
+    build_model = function (mesh, bcs, temperature)
         layout = trapping_variable_layout(mobile_name = mobile_name, trap_name = trapped_name)
         reaction = SimpleTrappingReactionOperator(Float64(data["k_trap"]), Float64(data["k_detrap"]), 1, 2)
         coeffs = ConstantDiffusion([Float64(data["diffusion_coefficient"]), 0.0])
@@ -354,11 +473,14 @@ function _build_fake_hotgates_backend(name::Symbol, data::Dict{String, Any})
             2, "Trapped stationary species", false)
     ]
 
-    build_model = function (mesh, bcs)
+    build_model = function (mesh, bcs, temperature)
         nx = length(mesh.x)
         adaptor = HotgatesTrappingAdaptor(
             [1], [2], [mobile_name], [trapped_name], String[], zeros(Float64, 0, nx))
         backend = FakeHotgatesModel(Float64(data["k_trap"]), Float64(data["k_detrap"]))
+        # Use problem-level temperature if provided; fall back to backend-level parameter
+        temp_provider = temperature !== nothing ? temperature :
+                        ConstantTemperature(Float64(data["temperature"]))
         boundary = _build_boundary_operator_from_defs(
             bcs, build_hotgates_variable_layout(adaptor),
             [Float64(data["diffusion_coefficient"]), 0.0])
@@ -366,7 +488,7 @@ function _build_fake_hotgates_backend(name::Symbol, data::Dict{String, Any})
             mesh = mesh,
             model = backend,
             adaptor = adaptor,
-            temperature = ConstantTemperature(Float64(data["temperature"])),
+            temperature = temp_provider,
             diffusion_coefficients = [Float64(data["diffusion_coefficient"]), 0.0],
             boundary = boundary
         )

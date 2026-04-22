@@ -37,6 +37,12 @@ struct InputSolverConfig{A, T, S}
     abstol::T
     reltol::T
     saveat::S
+    split_method::Symbol
+end
+
+# Backward-compatible constructor without split_method (defaults to Strang splitting)
+function InputSolverConfig(formulation, algorithm, dt, abstol, reltol, saveat)
+    return InputSolverConfig(formulation, algorithm, dt, abstol, reltol, saveat, :strang)
 end
 
 """

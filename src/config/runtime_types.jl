@@ -87,11 +87,13 @@ mutable struct BuildContext
     bcs::Dict{Symbol, Any}
     outputs::Dict{Symbol, Any}
     problems::Dict{Symbol, Any}
+    temperatures::Dict{Symbol, Any}
     artifacts::Dict{Symbol, Any}
 end
 
 function BuildContext()
     BuildContext(
+        Dict{Symbol, Any}(),
         Dict{Symbol, Any}(),
         Dict{Symbol, Any}(),
         Dict{Symbol, Any}(),
@@ -155,12 +157,18 @@ end
     OutputDefinition
 
 Named output definition produced from a registered output syntax block.
+
+For `type = "hdf5"`: `file` is the HDF5 path; `xdmf_path` is the companion XDMF
+path (`nothing` to skip XDMF generation).
+For `type = "summary_csv"`: `file` is the CSV path; `summary_fields` lists the
+derived scalar columns to write (empty = write all available).
 """
 struct OutputDefinition
     name::Symbol
     type_name::Symbol
     file::String
-    xdmf::Bool
+    xdmf_path::Union{Nothing, String}
+    summary_fields::Vector{String}
 end
 
 """
@@ -176,6 +184,7 @@ struct ProblemDefinition{S}
     ics::Vector{Symbol}
     bcs::Vector{Symbol}
     outputs::Vector{Symbol}
+    temperature::Union{Nothing, Symbol}
     tspan::Tuple{Float64, Float64}
     solver::S
 end

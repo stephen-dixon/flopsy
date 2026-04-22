@@ -34,7 +34,7 @@ end
 
 function _build_solver_config(cfg::InputSolverConfig)
     return SolverConfig(
-        formulation = _build_formulation(cfg.formulation),
+        formulation = _build_formulation(cfg.formulation, cfg.split_method),
         algorithm = _build_algorithm(cfg.algorithm),
         abstol = cfg.abstol,
         reltol = cfg.reltol,
@@ -45,7 +45,7 @@ function _build_solver_config(cfg::InputSolverConfig)
     )
 end
 
-function _build_formulation(formulation::Symbol)
+function _build_formulation(formulation::Symbol, split_method::Symbol = :strang)
     if formulation == :unsplit
         return UnsplitFormulation()
     elseif formulation == :imex
@@ -53,7 +53,8 @@ function _build_formulation(formulation::Symbol)
     elseif formulation == :imex_reaction
         return IMEXReactionFormulation()
     elseif formulation == :split
-        return SplitFormulation(StrangSplit())
+        scheme = split_method == :lie ? LieSplit() : StrangSplit()
+        return SplitFormulation(scheme)
     elseif formulation == :residual
         return ResidualFormulation()
     end

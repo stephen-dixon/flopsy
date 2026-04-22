@@ -162,6 +162,7 @@ export
        ConstantTemperature,
        LinearRampTemperature,
        FunctionTemperature,
+       PiecewiseTemperature,
        temperature_at, HotgatesTrappingAdaptor,
        HotgatesReactionOperator,
        build_hotgates_variable_layout,

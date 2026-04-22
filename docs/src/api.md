@@ -86,6 +86,7 @@ AbstractTemperatureProvider
 ConstantTemperature
 LinearRampTemperature
 FunctionTemperature
+PiecewiseTemperature
 temperature_at
 ```
 
