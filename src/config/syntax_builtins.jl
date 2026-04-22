@@ -335,7 +335,9 @@ function _register_problem_syntax!(registry::SyntaxRegistry)
         ParameterSpec(
             :saveat, false, nothing, "Save times"; kind = :vector, element_kind = :real),
         ParameterSpec(:dt, false, nothing,
-            "Macro time-step size (required for formulation = \"split\")"; kind = :real)
+            "Macro time-step size (required for formulation = \"split\")"; kind = :real),
+        ParameterSpec(:show_progress, false, true,
+            "Show a progress bar while solving"; kind = :bool)
     ]
 
     _build_problem_def = (data, ctx, reg, block) -> ProblemDefinition(
@@ -356,7 +358,8 @@ function _register_problem_syntax!(registry::SyntaxRegistry)
             Float64(data["abstol"]),
             Float64(data["reltol"]),
             get(data, "saveat", nothing) === nothing ? nothing : Float64.(data["saveat"]),
-            Symbol(lowercase(String(data["split_method"])))
+            Symbol(lowercase(String(data["split_method"]))),
+            Bool(data["show_progress"])
         )
     )
 

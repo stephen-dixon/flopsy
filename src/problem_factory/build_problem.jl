@@ -40,7 +40,7 @@ function _build_solver_config(cfg::InputSolverConfig)
         reltol = cfg.reltol,
         saveat = cfg.saveat,
         dt = cfg.dt,
-        show_progress = false,
+        show_progress = cfg.show_progress,
         show_solver_stats = false
     )
 end

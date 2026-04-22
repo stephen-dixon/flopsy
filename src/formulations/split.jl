@@ -101,19 +101,26 @@ function _solve_split(prob::SplitProblem, solver_config::SolverConfig, ::LieSpli
     saved_u = Vector{Float64}[]
 
     save_index = _record_initial!(saved_t, saved_u, t, u, saveat)
+    progress = _start_progress(prob.tspan; show_progress = solver_config.show_progress,
+        label = "Solving split")
 
-    while t < t_end - sqrt(eps(t_end))
-        dt = min(Δt, t_end - t)
-        t_prev = t
-        u_prev = copy(u)
+    try
+        while t < t_end - sqrt(eps(t_end))
+            dt = min(Δt, t_end - t)
+            t_prev = t
+            u_prev = copy(u)
 
-        # Lie: reaction sub-step → diffusion sub-step
-        u = _solve_substep(react_op, ctx, u, t, dt, solver_config)
-        u = _solve_substep(diff_op, ctx, u, t, dt, solver_config)
+            # Lie: reaction sub-step → diffusion sub-step
+            u = _solve_substep(react_op, ctx, u, t, dt, solver_config)
+            u = _solve_substep(diff_op, ctx, u, t, dt, solver_config)
 
-        t += dt
-        save_index = _record_interval!(
-            saved_t, saved_u, t_prev, u_prev, t, u, saveat, save_index)
+            t += dt
+            save_index = _record_interval!(
+                saved_t, saved_u, t_prev, u_prev, t, u, saveat, save_index)
+            _update_progress!(progress, t)
+        end
+    finally
+        _finish_progress!(progress)
     end
 
     return SplitSolution(saved_t, saved_u, :Success)
@@ -141,20 +148,27 @@ function _solve_split(prob::SplitProblem, solver_config::SolverConfig, ::StrangS
     saved_u = Vector{Float64}[]
 
     save_index = _record_initial!(saved_t, saved_u, t, u, saveat)
+    progress = _start_progress(prob.tspan; show_progress = solver_config.show_progress,
+        label = "Solving split")
 
-    while t < t_end - sqrt(eps(t_end))
-        dt = min(Δt, t_end - t)
-        t_prev = t
-        u_prev = copy(u)
+    try
+        while t < t_end - sqrt(eps(t_end))
+            dt = min(Δt, t_end - t)
+            t_prev = t
+            u_prev = copy(u)
 
-        # Strang: half reaction → full diffusion → half reaction
-        u = _solve_substep(react_op, ctx, u, t, dt / 2, solver_config)
-        u = _solve_substep(diff_op, ctx, u, t, dt, solver_config)
-        u = _solve_substep(react_op, ctx, u, t + dt / 2, dt / 2, solver_config)
+            # Strang: half reaction → full diffusion → half reaction
+            u = _solve_substep(react_op, ctx, u, t, dt / 2, solver_config)
+            u = _solve_substep(diff_op, ctx, u, t, dt, solver_config)
+            u = _solve_substep(react_op, ctx, u, t + dt / 2, dt / 2, solver_config)
 
-        t += dt
-        save_index = _record_interval!(
-            saved_t, saved_u, t_prev, u_prev, t, u, saveat, save_index)
+            t += dt
+            save_index = _record_interval!(
+                saved_t, saved_u, t_prev, u_prev, t, u, saveat, save_index)
+            _update_progress!(progress, t)
+        end
+    finally
+        _finish_progress!(progress)
     end
 
     return SplitSolution(saved_t, saved_u, :Success)

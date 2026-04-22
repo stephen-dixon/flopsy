@@ -4,44 +4,49 @@
 Run a SciML ODE/DAE problem with the parameters from `solver_config`.
 """
 function solve_problem(prob::SciMLBase.AbstractODEProblem, solver_config::SolverConfig)
-    kwargs = solver_config.kwargs
+    progress = _start_progress(prob.tspan; show_progress = solver_config.show_progress)
+    kwargs = _merge_callback(solver_config.kwargs, _progress_callback(progress))
 
-    if solver_config.saveat !== nothing && solver_config.dt !== nothing
-        return SciMLBase.solve(
-            prob,
-            solver_config.algorithm;
-            abstol = solver_config.abstol,
-            reltol = solver_config.reltol,
-            saveat = solver_config.saveat,
-            dt = solver_config.dt,
-            kwargs...
-        )
-    elseif solver_config.saveat !== nothing
-        return SciMLBase.solve(
-            prob,
-            solver_config.algorithm;
-            abstol = solver_config.abstol,
-            reltol = solver_config.reltol,
-            saveat = solver_config.saveat,
-            kwargs...
-        )
-    elseif solver_config.dt !== nothing
-        return SciMLBase.solve(
-            prob,
-            solver_config.algorithm;
-            abstol = solver_config.abstol,
-            reltol = solver_config.reltol,
-            dt = solver_config.dt,
-            kwargs...
-        )
-    else
-        return SciMLBase.solve(
-            prob,
-            solver_config.algorithm;
-            abstol = solver_config.abstol,
-            reltol = solver_config.reltol,
-            kwargs...
-        )
+    try
+        if solver_config.saveat !== nothing && solver_config.dt !== nothing
+            return SciMLBase.solve(
+                prob,
+                solver_config.algorithm;
+                abstol = solver_config.abstol,
+                reltol = solver_config.reltol,
+                saveat = solver_config.saveat,
+                dt = solver_config.dt,
+                kwargs...
+            )
+        elseif solver_config.saveat !== nothing
+            return SciMLBase.solve(
+                prob,
+                solver_config.algorithm;
+                abstol = solver_config.abstol,
+                reltol = solver_config.reltol,
+                saveat = solver_config.saveat,
+                kwargs...
+            )
+        elseif solver_config.dt !== nothing
+            return SciMLBase.solve(
+                prob,
+                solver_config.algorithm;
+                abstol = solver_config.abstol,
+                reltol = solver_config.reltol,
+                dt = solver_config.dt,
+                kwargs...
+            )
+        else
+            return SciMLBase.solve(
+                prob,
+                solver_config.algorithm;
+                abstol = solver_config.abstol,
+                reltol = solver_config.reltol,
+                kwargs...
+            )
+        end
+    finally
+        _finish_progress!(progress)
     end
 end
 

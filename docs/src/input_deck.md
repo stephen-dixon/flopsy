@@ -142,6 +142,7 @@ saveat = ...
 | `dt` | Required for `split` formulation (macro step size) |
 | `abstol` | Absolute tolerance (default 1e-8) |
 | `reltol` | Relative tolerance (default 1e-6) |
+| `show_progress` | Show a solve progress bar (default `true`; set `false` for batch logs/tests) |
 
 ## Validation Rules
 
