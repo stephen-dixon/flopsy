@@ -137,7 +137,11 @@ function _materialize_output!(result::SimulationResult, output::OutputDefinition
     file = _resolve_output_path(output.file, output_dir)
 
     if output.type_name == :hdf5
-        write_field_output_hdf5(result, file)
+        write_field_output_hdf5(result, file;
+            export_equilibrium_trapped = output.export_equilibrium_trapped,
+            export_retention_total = output.export_retention_total,
+            export_retention_by_occupation = output.export_retention_by_occupation,
+            export_Deff = output.export_Deff)
         if output.xdmf_path !== nothing
             xdmf = _resolve_output_path(output.xdmf_path, output_dir)
             write_xdmf_for_flopsy_h5(file, xdmf)

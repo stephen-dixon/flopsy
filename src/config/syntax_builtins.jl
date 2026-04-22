@@ -209,7 +209,19 @@ function _register_output_syntax!(registry::SyntaxRegistry)
                 ParameterSpec(:file, true, nothing, "Output HDF5 file path"; kind = :string),
                 ParameterSpec(:xdmf, false, false,
                     "XDMF companion: false/true (auto path) or explicit string path";
-                    kind = :any)
+                    kind = :any),
+                ParameterSpec(:export_equilibrium_trapped, false, false,
+                    "Export equilibrium trapped concentrations as pointwise auxiliary fields";
+                    kind = :bool),
+                ParameterSpec(:export_retention_total, false, false,
+                    "Export equilibrium total retention as pointwise auxiliary fields";
+                    kind = :bool),
+                ParameterSpec(:export_retention_by_occupation, false, false,
+                    "Export equilibrium retention by trap occupation as pointwise auxiliary fields";
+                    kind = :bool),
+                ParameterSpec(:export_Deff, false, false,
+                    "Export effective diffusivity as a pointwise auxiliary field";
+                    kind = :bool)
             ],
             "HDF5 pointwise field output with optional XDMF companion for ParaView.",
             (data, ctx, reg, block) -> nothing,
@@ -223,7 +235,17 @@ function _register_output_syntax!(registry::SyntaxRegistry)
                 else
                     nothing
                 end
-                OutputDefinition(block.name, block.type_name, h5_file, xdmf_path, String[])
+                OutputDefinition(
+                    block.name,
+                    block.type_name,
+                    h5_file,
+                    xdmf_path,
+                    String[],
+                    Bool(data["export_equilibrium_trapped"]),
+                    Bool(data["export_retention_total"]),
+                    Bool(data["export_retention_by_occupation"]),
+                    Bool(data["export_Deff"])
+                )
             end,
             :builtin
         ))
@@ -368,7 +390,8 @@ function _register_problem_syntax!(registry::SyntaxRegistry)
             throw(ConfigValidationError("Block [problem.$(block.name)] field `tspan` must contain exactly two values"))
     end
 
-    for type_name in (:simulation, :diffusion_1d, :trapping_1d, :hotgates_trapping)
+    for type_name in (:simulation, :diffusion_1d, :trapping_1d, :hotgates_trapping,
+        :palioxis_effective_diffusion)
         register_syntax!(registry,
             SyntaxSpec(
                 :problem,

@@ -116,6 +116,107 @@ function jacobian!(J, op::LinearDiffusionOperator, u, ctx::SystemContext, t)
 end
 
 # ===========================================================================
+# NonlinearDiffusionOperator
+# ===========================================================================
+
+"""
+    NonlinearDiffusionOperator(selector, evaluator, defects, temperature; left=nothing, right=nothing)
+
+State-dependent diffusion operator for one-dimensional problems.
+
+The operator solves only the selected state variables, but evaluates a local
+constitutive law at every node using the current solution `u`, the local
+temperature, and a node-local defect vector.  The evaluator must be callable as:
+
+```julia
+evaluator(mobile::AbstractVector, defects::AbstractVector, T::Real)
+```
+
+and must return an object with a scalar `Deff` property.  This keeps the
+operator independent of any specific backend while allowing package extensions
+such as Palioxis to provide nonlinear equilibrium-trapping constitutive laws.
+
+Fluxes are discretised with face-averaged diffusivities:
+`D_{i+1/2} = 0.5 * (D_i + D_{i+1})`.  Boundary conditions are optional weak
+Dirichlet ghost-node corrections supplied through `left` and `right`; omitted
+boundaries are zero-flux Neumann boundaries.
+"""
+struct NonlinearDiffusionOperator{S, E, D, TP, L, R} <: AbstractDiffusionOperator
+    selector::S
+    evaluator::E
+    defects::D
+    temperature::TP
+    left::L
+    right::R
+end
+
+function NonlinearDiffusionOperator(selector, evaluator, defects, temperature;
+        left = nothing, right = nothing)
+    return NonlinearDiffusionOperator(selector, evaluator, defects, temperature, left, right)
+end
+
+supports_rhs(::NonlinearDiffusionOperator) = true
+
+diffusion_variable_indices(op::NonlinearDiffusionOperator, layout) = op.selector(layout)
+
+function _nonlinear_D_values(op::NonlinearDiffusionOperator, U, layout, ctx, t)
+    vars = op.selector(layout)
+    nx = ctx.nx
+    D = zeros(Float64, length(vars), nx)
+
+    @inbounds for ix in 1:nx
+        T_val = op.temperature !== nothing ?
+                Float64(temperature_at(op.temperature, ctx, t, ix)) : NaN
+        defects = @view op.defects[:, ix]
+        mobile = [Float64(U[ivar, ix]) for ivar in vars]
+        eq = op.evaluator(mobile, defects, T_val)
+        for j in eachindex(vars)
+            D[j, ix] = Float64(getproperty(eq, :Deff))
+        end
+    end
+
+    return D
+end
+
+function rhs!(du, op::NonlinearDiffusionOperator, u, ctx::SystemContext, t)
+    layout = ctx.layout
+    nx = ctx.nx
+    dx = ctx.mesh.dx
+    invdx2 = inv(dx * dx)
+    U = state_view(u, layout, nx)
+    dU = state_view(du, layout, nx)
+    vars = op.selector(layout)
+    D = _nonlinear_D_values(op, U, layout, ctx, t)
+
+    @inbounds for (j, ivar) in enumerate(vars)
+        D_right = 0.5 * (D[j, 1] + D[j, 2])
+        dU[ivar, 1] += D_right * (U[ivar, 2] - U[ivar, 1]) * invdx2
+        if op.left !== nothing
+            g = op.left(t)
+            dU[ivar, 1] += D[j, 1] * (g - U[ivar, 1]) * invdx2
+        end
+
+        for ix in 2:(nx - 1)
+            D_left = 0.5 * (D[j, ix - 1] + D[j, ix])
+            D_right = 0.5 * (D[j, ix] + D[j, ix + 1])
+            dU[ivar, ix] += (
+                D_right * (U[ivar, ix + 1] - U[ivar, ix]) -
+                D_left * (U[ivar, ix] - U[ivar, ix - 1])
+            ) * invdx2
+        end
+
+        D_left = 0.5 * (D[j, nx - 1] + D[j, nx])
+        dU[ivar, nx] += D_left * (U[ivar, nx - 1] - U[ivar, nx]) * invdx2
+        if op.right !== nothing
+            g = op.right(t)
+            dU[ivar, nx] += D[j, nx] * (g - U[ivar, nx]) * invdx2
+        end
+    end
+
+    return du
+end
+
+# ===========================================================================
 # WeakDirichletBoundaryOperator  (ghost-node correction, formerly DirichletBoundaryOperator)
 # ===========================================================================
 
@@ -643,4 +744,34 @@ end
 function surface_fluxes(op::DirichletBoundaryOperator{<:EliminatedMethod},
         result::SimulationResult)
     return _compute_surface_fluxes(op.selector, op.coefficients, op.temperature, result)
+end
+
+function surface_fluxes(op::NonlinearDiffusionOperator, result::SimulationResult)
+    model = result.model
+    layout = model.layout
+    mesh = model.context.mesh
+    dx = mesh.dx
+    nx = model.context.nx
+    vars = op.selector(layout)
+    names = variable_names(layout)
+    nt = length(result.solution.u)
+    out = Dict{Symbol, NamedTuple}()
+
+    for ivar in vars
+        left_flux = zeros(Float64, nt)
+        right_flux = zeros(Float64, nt)
+
+        for it in 1:nt
+            U = state_view(result.solution.u[it], layout, nx)
+            D = _nonlinear_D_values(op, U, layout, model.context, result.solution.t[it])
+            j = findfirst(==(ivar), vars)
+            left_flux[it] = 0.5 * (D[j, 1] + D[j, 2]) * (U[ivar, 2] - U[ivar, 1]) / dx
+            right_flux[it] = 0.5 * (D[j, nx - 1] + D[j, nx]) *
+                             (U[ivar, nx - 1] - U[ivar, nx]) / dx
+        end
+
+        out[names[ivar]] = (left = left_flux, right = right_flux)
+    end
+
+    return out
 end

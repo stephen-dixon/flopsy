@@ -162,11 +162,18 @@ Layout:
 - `/fields/<varname>`  — matrix `(nt, nx)` for each variable
 - `/metadata/...`      — selected metadata as string datasets
 """
-function write_field_output_hdf5(result::SimulationResult, path::AbstractString)
+function write_field_output_hdf5(result::SimulationResult, path::AbstractString;
+        export_equilibrium_trapped::Bool = false,
+        export_retention_total::Bool = false,
+        export_retention_by_occupation::Bool = false,
+        export_Deff::Bool = false)
     model = result.model
     layout = model.layout
     mesh = model.context.mesh
     t = result.solution.t
+    export_aux = export_equilibrium_trapped || export_retention_total ||
+                 export_retention_by_occupation || export_Deff
+    aux = export_aux ? compute_equilibrium_aux_fields(result) : Dict{Symbol, Any}()
 
     h5open(path, "w") do h5
         h5["time"] = collect(t)
@@ -176,6 +183,17 @@ function write_field_output_hdf5(result::SimulationResult, path::AbstractString)
         g_fields = create_group(h5, "fields")
         for name in variable_names(layout)
             g_fields[string(name)] = variable_timeseries(result, name)
+        end
+        if export_aux
+            _write_equilibrium_aux_fields!(
+                h5,
+                g_fields,
+                aux;
+                export_equilibrium_trapped = export_equilibrium_trapped,
+                export_retention_total = export_retention_total,
+                export_retention_by_occupation = export_retention_by_occupation,
+                export_Deff = export_Deff
+            )
         end
 
         g_meta = create_group(h5, "metadata")
@@ -188,6 +206,55 @@ function write_field_output_hdf5(result::SimulationResult, path::AbstractString)
     end
 
     return path
+end
+
+function _write_equilibrium_aux_fields!(h5, g_fields, aux;
+        export_equilibrium_trapped::Bool,
+        export_retention_total::Bool,
+        export_retention_by_occupation::Bool,
+        export_Deff::Bool)
+    isempty(aux) && return nothing
+
+    g_aux = create_group(h5, "equilibrium_aux")
+    meta = get(aux, :metadata, Dict{String, Any}())
+    g_aux["schema_version"] = string(get(meta, "schema_version", "flopsy.equilibrium_aux.v1"))
+    for (k, v) in pairs(meta)
+        string(k) == "schema_version" && continue
+        try
+            g_aux[string(k)] = string(v)
+        catch
+        end
+    end
+    if haskey(aux, :temperature_K)
+        g_aux["temperature_K"] = aux[:temperature_K]
+    end
+
+    datasets = Pair{String, Any}[]
+    export_equilibrium_trapped &&
+        push!(datasets, "equilibrium_trapped" => get(aux, :equilibrium_trapped, nothing))
+    export_retention_total &&
+        push!(datasets, "retention_total" => get(aux, :retention_total, nothing))
+    export_retention_by_occupation &&
+        push!(datasets,
+            "retention_by_occupation" => get(aux, :retention_by_occupation, nothing))
+    export_Deff && push!(datasets, "Deff" => get(aux, :Deff, nothing))
+
+    for (name, data) in datasets
+        data === nothing && continue
+        g_aux[name] = data
+        _write_aux_as_field_slices!(g_fields, name, data)
+    end
+    return nothing
+end
+
+function _write_aux_as_field_slices!(g_fields, name::AbstractString, data::AbstractArray)
+    ndims(data) == 2 && (g_fields[name] = data; return nothing)
+    ndims(data) < 3 && return nothing
+    ncomp = size(data, 3)
+    for icomp in 1:ncomp
+        g_fields["$(name)_$(icomp)"] = data[:, :, icomp]
+    end
+    return nothing
 end
 
 """

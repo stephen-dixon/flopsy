@@ -110,6 +110,7 @@ You can inspect the live registry with:
 ```bash
 flopsy syntax list
 flopsy syntax show backend palioxis_trapping
+flopsy syntax show backend palioxis_effective_diffusion
 flopsy syntax show ic palioxis_equilibrium
 ```
 
@@ -148,6 +149,71 @@ model = build_palioxis_trapping_model(
 ```
 
 The model is immediately ready to use with Flopsy's solver infrastructure.
+
+### Palioxis Effective Diffusion
+
+For implantation or loading stages where trapped populations should remain at
+local Palioxis equilibrium, use the separate effective-diffusion model family:
+
+```julia
+using Flopsy, Palioxis, OrdinaryDiffEq, ADTypes
+
+palioxis_model = Palioxis.MultipleDefectModel("mason_model.xml")
+mesh = Mesh1D(5e-6, 101)
+defects = fill(1e-12, palioxis_model.n_traps, length(mesh.x))
+temperature = ConstantTemperature(450.0)
+
+model = build_palioxis_effective_diffusion_model(
+    palioxis_model = palioxis_model,
+    mesh = mesh,
+    defects = defects,
+    temperature = temperature,
+    left_bc = t -> 0.0,
+    right_bc = t -> 0.0,
+)
+```
+
+Only mobile gas variables are present in the solve state.  At each node/time,
+`evaluate_equilibrium_state` calls Palioxis to compute equilibrium trapped
+concentrations, total retention, occupation-resolved retention, and the scalar
+effective diffusivity used by `NonlinearDiffusionOperator`.  This is a
+Deff-only equilibrium reduction; it does not add a state-dependent mass matrix.
+
+Auxiliary fields can be exported to HDF5:
+
+```julia
+write_field_output_hdf5(result, "effective.h5";
+    export_equilibrium_trapped = true,
+    export_retention_total = true,
+    export_retention_by_occupation = true,
+    export_Deff = true)
+```
+
+The file contains an `/equilibrium_aux` group with schema version
+`flopsy.equilibrium_aux.v1`, trap indices, isotope ordering, occupation
+ordering, and the temperature field name.  Auxiliary arrays use the same
+mesh/node ordering as normal Flopsy fields: `(time, node, component)`, except
+`Deff`, which is `(time, node)`.
+
+### Effective-to-Dynamic Handoff
+
+After an effective stage, build a dynamic Palioxis initial condition:
+
+```julia
+attach_equilibrium_aux_fields!(result1)
+u0_dynamic = build_dynamic_ic_from_stage1(result1; mode = :use_exported_trapped)
+```
+
+Supported handoff modes are:
+
+- `:use_exported_trapped` uses `result.summaries[:equilibrium_aux]` directly.
+- `:recompute_from_mobile` recomputes trapped values from the final mobile field.
+- `:use_exported_retention` is reserved for future retention reconstruction rules
+  and currently throws unless such a rule is implemented.
+
+For an end-to-end path, `run_implantation_then_desorption` runs an effective
+diffusion stage, attaches auxiliary fields, constructs the dynamic initial
+condition, and runs the existing dynamic Palioxis model.
 
 ### Further Palioxis Capabilities
 

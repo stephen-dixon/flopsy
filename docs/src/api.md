@@ -107,6 +107,7 @@ NullOperator
 OperatorSum
 active_operators
 LinearDiffusionOperator
+NonlinearDiffusionOperator
 WeakDirichletBoundaryOperator
 DirichletBoundaryOperator
 PenaltyMethod
@@ -169,6 +170,13 @@ HotgatesReactionOperator
 build_hotgates_variable_layout
 build_hotgates_trapping_model
 build_palioxis_trapping_model
+build_palioxis_effective_diffusion_model
+PalioxisEquilibriumState
+evaluate_equilibrium_state
+build_dynamic_ic_from_stage1
+run_effective_diffusion
+run_dynamic_palioxis
+run_implantation_then_desorption
 build_equilibrium_ic
 build_ic_from_total_hydrogen
 FakeHotgatesModel
@@ -186,6 +194,8 @@ integrated_variable
 surface_diffusive_fluxes
 check_mass_conservation
 build_summary_dataframe
+compute_equilibrium_aux_fields
+attach_equilibrium_aux_fields!
 write_field_output_hdf5
 write_xdmf_for_flopsy_h5
 write_summary_csv

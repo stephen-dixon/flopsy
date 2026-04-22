@@ -39,6 +39,7 @@ include("core/models.jl")
 include("core/generic_rd_model.jl")
 include("core/trapping_model.jl")
 include("core/hotgates_adapter.jl")
+include("models/effective_diffusion.jl")
 
 include("config/types.jl")
 include("config/parse.jl")
@@ -168,8 +169,19 @@ export
        build_hotgates_variable_layout,
        build_hotgates_trapping_model,
        build_palioxis_trapping_model,
+       build_palioxis_effective_diffusion_model,
        build_equilibrium_ic,
-       build_ic_from_total_hydrogen, FakeHotgatesModel,
+       build_ic_from_total_hydrogen,
+       PalioxisEquilibriumState,
+       evaluate_equilibrium_state,
+       compute_equilibrium_aux_fields,
+       attach_equilibrium_aux_fields!,
+       build_dynamic_ic_from_stage1,
+       run_effective_diffusion,
+       run_dynamic_palioxis,
+       run_implantation_then_desorption,
+       NonlinearDiffusionOperator,
+       FakeHotgatesModel,
        hotgates_rates!, plot_tds_flux,
        plot_spatial_snapshot,
        plot_spatial_evolution,

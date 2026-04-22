@@ -169,6 +169,16 @@ struct OutputDefinition
     file::String
     xdmf_path::Union{Nothing, String}
     summary_fields::Vector{String}
+    export_equilibrium_trapped::Bool
+    export_retention_total::Bool
+    export_retention_by_occupation::Bool
+    export_Deff::Bool
+end
+
+function OutputDefinition(name::Symbol, type_name::Symbol, file::String,
+        xdmf_path::Union{Nothing, String}, summary_fields::Vector{String})
+    return OutputDefinition(
+        name, type_name, file, xdmf_path, summary_fields, false, false, false, false)
 end
 
 """

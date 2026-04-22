@@ -50,3 +50,27 @@
         @test get_D(cd, 1, 7, 10.0) ≈ 15.0
     end
 end
+
+@testset "NonlinearDiffusionOperator" begin
+    mesh = Mesh1D(1.0, 5)
+    layout = VariableLayout([VariableInfo(:c, :mobile, Set([:diffusion]))])
+    selector = layout -> variables_with_tag(layout, :diffusion)
+    defects = zeros(Float64, 1, length(mesh.x))
+    evaluator = (mobile, defects, T) -> PalioxisEquilibriumState(
+        Float64[],
+        Float64[mobile[1]],
+        Float64[],
+        1.0 + mobile[1]
+    )
+    op = NonlinearDiffusionOperator(selector, evaluator, defects, ConstantTemperature(300.0))
+    model = build_rd_model(layout = layout, mesh = mesh, diffusion = op)
+
+    u = [1.0, 2.0, 3.0, 2.0, 1.0]
+    du = zeros(Float64, length(u))
+    rhs!(du, op, u, model.context, 0.0)
+
+    @test all(isfinite, du)
+    @test du[3] < 0.0
+    result = wrap_result(model, (; t = [0.0], u = [u], retcode = :Success), nothing)
+    @test !isempty(surface_diffusive_fluxes(result))
+end

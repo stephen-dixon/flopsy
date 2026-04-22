@@ -105,11 +105,19 @@ Example combining both:
 type = "hdf5"
 file = "result.h5"
 xdmf = true          # or "result.xdmf" for explicit path
+export_Deff = true  # optional Palioxis effective-diffusion auxiliary field
+export_equilibrium_trapped = true
+export_retention_total = true
+export_retention_by_occupation = true
 
 [output.summary]
 type = "summary_csv"
 file = "summary.csv"
 ```
+
+The equilibrium auxiliary export flags are ignored for ordinary models.  For
+`backend.type = "palioxis_effective_diffusion"` they add an `/equilibrium_aux`
+HDF5 group and pointwise field slices for ParaView/XDMF.
 
 ## TDS Problem Class
 
