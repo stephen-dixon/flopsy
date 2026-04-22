@@ -1,0 +1,70 @@
+# Declarative TDS run with the Palioxis backend and Mason damage profile.
+#
+# Run from the repository root with Palioxis loaded so the package extension
+# registers the palioxis_trapping backend:
+#
+#   julia --project=. -e 'using Flopsy, Palioxis; run_input_deck("examples/mason_palioxis_tds.toml"; output_dir="out_mason_tds")'
+
+[mesh.sample]
+type = "uniform_1d"
+xmin = 0.0
+xmax = 5.0e-6
+nx = 102
+
+[backend.palioxis]
+type = "palioxis_trapping"
+xml_file = "mason_model.xml"
+palioxis_root = "/Users/sdixon/src/Palioxis"
+defect_density = 1.0e-15
+defect_profile_csv = "vacfrac_10.8MeV_0.35dpa.csv"
+
+[ic.equilibrium_450K]
+type = "palioxis_equilibrium"
+backend = "palioxis"
+driving_quantity = "mobile"
+value = 1.0e-10
+temperature = 450.0
+
+[bc.vacuum_left]
+type = "dirichlet"
+species = "D"
+boundary = "left"
+value = 0.0
+method = "weak"
+
+[bc.vacuum_right]
+type = "dirichlet"
+species = "D"
+boundary = "right"
+value = 0.0
+method = "weak"
+
+[temperature.tds_ramp]
+type = "linear_ramp"
+T0 = 450.0
+rate = 0.05 # 3 K/min
+
+[output.fields]
+type = "hdf5"
+file = "mason_tds_fields.h5"
+xdmf = true
+
+[output.summary]
+type = "summary_csv"
+file = "mason_tds_summary.csv"
+
+[problem.run]
+type = "tds"
+mesh = "sample"
+backend = "palioxis"
+temperature = "tds_ramp"
+ics = ["equilibrium_450K"]
+bcs = ["vacuum_left", "vacuum_right"]
+outputs = ["fields", "summary"]
+tspan = [0.0, 15000.0] # 450 K to 1200 K at 3 K/min
+dt = 60.0
+formulation = "split"
+split_method = "strang"
+algorithm = "Rodas5"
+abstol = 1.0e-10
+reltol = 1.0e-8

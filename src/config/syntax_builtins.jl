@@ -497,7 +497,8 @@ function _build_fake_hotgates_backend(name::Symbol, data::Dict{String, Any})
     return BackendDefinition(name, :hotgates_trapping, species, build_model, (;))
 end
 
-function _build_boundary_operator_from_defs(bcs::Vector{BCDefinition}, layout::VariableLayout, coefficients)
+function _build_boundary_operator_from_defs(
+        bcs::Vector{BCDefinition}, layout::VariableLayout, coefficients, temperature = nothing)
     isempty(bcs) && return nothing
     ops = AbstractOperator[]
     names = variable_names(layout)
@@ -514,9 +515,9 @@ function _build_boundary_operator_from_defs(bcs::Vector{BCDefinition}, layout::V
         end
         if bc.method == :weak
             if bc.boundary == :left
-                push!(ops, WeakDirichletBoundaryOperator(selector, coefficients, nothing; left = bc_fn))
+                push!(ops, WeakDirichletBoundaryOperator(selector, coefficients, temperature; left = bc_fn))
             else
-                push!(ops, WeakDirichletBoundaryOperator(selector, coefficients, nothing; right = bc_fn))
+                push!(ops, WeakDirichletBoundaryOperator(selector, coefficients, temperature; right = bc_fn))
             end
         else
             push!(ops,
@@ -525,7 +526,7 @@ function _build_boundary_operator_from_defs(bcs::Vector{BCDefinition}, layout::V
                     bc_fn,
                     selector,
                     coefficients,
-                    nothing;
+                    temperature;
                     method = _boundary_method_from_symbol(bc.method)
                 ))
         end

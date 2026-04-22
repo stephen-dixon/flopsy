@@ -98,7 +98,30 @@ function solve(problem::SimulationProblem)
         "nvariables" => nvariables(problem.model.layout),
         "retcode" => string(getproperty(sol, :retcode))
     )
-    return wrap_result(problem.model, sol, problem.config; metadata = metadata)
+    summaries = Dict{Symbol, Any}()
+    temperature = _result_temperature_provider(problem.model)
+    if temperature !== nothing
+        summaries[:extra_timeseries] = Dict(
+            "temperature_K" => [
+                Float64(temperature_at(temperature, problem.model.context, t, 1))
+                for t in sol.t
+            ],
+        )
+    end
+    return wrap_result(problem.model, sol, problem.config;
+        summaries = summaries, metadata = metadata)
+end
+
+function _result_temperature_provider(model::SystemModel)
+    ops = model.operators
+    if ops.reaction !== nothing && hasproperty(ops.reaction, :temperature)
+        return getproperty(ops.reaction, :temperature)
+    elseif ops.diffusion !== nothing && hasproperty(ops.diffusion, :temperature)
+        return getproperty(ops.diffusion, :temperature)
+    elseif ops.boundary !== nothing && hasproperty(ops.boundary, :temperature)
+        return getproperty(ops.boundary, :temperature)
+    end
+    return nothing
 end
 
 """

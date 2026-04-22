@@ -7,6 +7,8 @@ module PalioxisExt
 
 using Flopsy
 using Palioxis
+import CSV
+import DataFrames
 
 function register_flopsy_plugin!(registry::Flopsy.SyntaxRegistry)
     Flopsy.register_syntax!(registry,
@@ -20,7 +22,12 @@ function register_flopsy_plugin!(registry::Flopsy.SyntaxRegistry)
                 Flopsy.ParameterSpec(:palioxis_root, false, "",
                     "Optional Palioxis root for init"; kind = :string),
                 Flopsy.ParameterSpec(
-                    :defect_density, false, 1e-3, "Uniform defect density"; kind = :real)
+                    :defect_density, false, 1e-3, "Uniform defect density"; kind = :real),
+                Flopsy.ParameterSpec(:defect_profile_csv, false, "",
+                    "Optional two-column CSV profile (x, defect density) overriding defect_density";
+                    kind = :string),
+                Flopsy.ParameterSpec(:defect_profile_scale, false, 1.0,
+                    "Multiplier applied to values loaded from defect_profile_csv"; kind = :real)
             ],
             "Palioxis-backed trapping backend registered by the Palioxis extension.",
             (data, ctx, reg, block) -> nothing,
@@ -45,10 +52,10 @@ function register_flopsy_plugin!(registry::Flopsy.SyntaxRegistry)
                             "Palioxis trapped species", false))
                 end
 
-                build_model = function (mesh, bcs)
+                build_model = function (mesh, bcs, temperature = nothing)
                     nx = length(mesh.x)
-                    defects = fill(Float64(data["defect_density"]), pal_model.n_traps, nx)
-                    trap_occupancies = Palioxis.get_max_trap_occupancy(pal_model)
+                    defects = _build_defect_profile(data, mesh, pal_model.n_traps)
+                    trap_occupancies = _max_trap_occupancies(pal_model, n_ne)
                     trap_groups = Vector{Vector{Int}}()
                     pos = 1
                     for occ in trap_occupancies
@@ -64,17 +71,18 @@ function register_flopsy_plugin!(registry::Flopsy.SyntaxRegistry)
                         Matrix{Float64}(defects),
                         trap_groups
                     )
+                    temp = temperature === nothing ? Flopsy.ConstantTemperature(300.0) : temperature
                     diff_coeffs = PalioxisDiffusionCoefficients(pal_model)
                     layout = Flopsy.build_hotgates_variable_layout(adaptor)
-                    boundary = Flopsy._build_boundary_operator_from_defs(bcs, layout, diff_coeffs)
+                    boundary = Flopsy._build_boundary_operator_from_defs(bcs, layout, diff_coeffs, temp)
                     return Flopsy.build_rd_model(
                         layout = layout,
                         mesh = mesh,
                         reaction = Flopsy.HotgatesReactionOperator(
-                            pal_model, adaptor, Flopsy.ConstantTemperature(300.0)),
+                            pal_model, adaptor, temp),
                         diffusion = Flopsy.LinearDiffusionOperator(diff_coeffs,
                             layout -> Flopsy.variables_with_tag(layout, :diffusion),
-                            nothing, Flopsy.ConstantTemperature(300.0)),
+                            nothing, temp),
                         boundary = boundary
                     )
                 end
@@ -99,8 +107,8 @@ function register_flopsy_plugin!(registry::Flopsy.SyntaxRegistry)
                 Flopsy.ParameterSpec(
                     :backend, true, nothing, "Referenced backend"; kind = :string),
                 Flopsy.ParameterSpec(
-                    :driving_quantity, true, nothing, "Currently supports H_total";
-                    kind = :string, allowed_values = ["H_total"]),
+                    :driving_quantity, true, nothing, "Supports H_total or mobile";
+                    kind = :string, allowed_values = ["H_total", "mobile"]),
                 Flopsy.ParameterSpec(:value, true, nothing, "Driving value"; kind = :real),
                 Flopsy.ParameterSpec(
                     :temperature, true, nothing, "Equilibrium temperature"; kind = :real)
@@ -130,13 +138,22 @@ function register_flopsy_plugin!(registry::Flopsy.SyntaxRegistry)
                     (u0,
                         backend_def,
                         model) -> begin
-                        total = fill(Float64(data["value"]), model.context.nx)
-                        tmp = Flopsy.build_ic_from_total_hydrogen(
-                            pal_model,
-                            model,
-                            total,
-                            Float64(data["temperature"])
-                        )
+                        value = fill(Float64(data["value"]), model.context.nx)
+                        tmp = if data["driving_quantity"] == "H_total"
+                            Flopsy.build_ic_from_total_hydrogen(
+                                pal_model,
+                                model,
+                                value,
+                                Float64(data["temperature"])
+                            )
+                        else
+                            Flopsy.build_equilibrium_ic(
+                                pal_model,
+                                model,
+                                value,
+                                Float64(data["temperature"])
+                            )
+                        end
                         copyto!(u0, tmp)
                         return u0
                     end
@@ -146,6 +163,38 @@ function register_flopsy_plugin!(registry::Flopsy.SyntaxRegistry)
         ))
 
     return registry
+end
+
+function _build_defect_profile(data, mesh::Flopsy.Mesh1D, n_traps::Integer)
+    profile_csv = String(get(data, "defect_profile_csv", ""))
+    if isempty(profile_csv)
+        return fill(Float64(data["defect_density"]), n_traps, length(mesh.x))
+    end
+
+    table = CSV.File(profile_csv; header = false) |> DataFrames.DataFrame
+    DataFrames.ncol(table) >= 2 ||
+        throw(ArgumentError("defect_profile_csv must contain at least two columns: x, defect density"))
+
+    xp = Float64.(table[!, 1])
+    yp = Float64.(table[!, 2]) .* Float64(get(data, "defect_profile_scale", 1.0))
+    length(xp) >= 2 ||
+        throw(ArgumentError("defect_profile_csv must contain at least two rows"))
+    all(diff(xp) .>= 0) ||
+        throw(ArgumentError("defect_profile_csv x values must be sorted in ascending order"))
+
+    vals = [_interp_profile(xp, yp, x) for x in mesh.x]
+    return repeat(reshape(vals, 1, :), n_traps, 1)
+end
+
+function _interp_profile(xp::AbstractVector, yp::AbstractVector, x::Real)
+    x <= xp[1] && return yp[1]
+    x >= xp[end] && return yp[end]
+    i = searchsortedlast(xp, x)
+    x0 = xp[i]
+    x1 = xp[i + 1]
+    y0 = yp[i]
+    y1 = yp[i + 1]
+    return y0 + (y1 - y0) * (Float64(x) - x0) / (x1 - x0)
 end
 
 function __init__()
@@ -277,7 +326,7 @@ function Flopsy.build_palioxis_trapping_model(;
     # Build trap_groups from the Palioxis occupancy structure.
     # Each defect type has max_occ[d] fill levels; levels within a type are coupled
     # (multi-occupancy trapping couples adjacent occupancy states).
-    trap_occupancies = Palioxis.get_max_trap_occupancy(palioxis_model)
+    trap_occupancies = _max_trap_occupancies(palioxis_model, n_ne)
     trap_groups = Vector{Vector{Int}}()
     pos = 1
     for occ in trap_occupancies
@@ -321,6 +370,12 @@ function Flopsy.build_palioxis_trapping_model(;
         diffusion = diffusion,
         boundary = boundary
     )
+end
+
+function _max_trap_occupancies(palioxis_model::Palioxis.MultipleDefectModel, n_ne::Integer)
+    n_ne == 0 && return Int[]
+    return [Palioxis.get_max_trap_occupancy(palioxis_model, i)
+            for i in 0:(palioxis_model.n_traps - 1)]
 end
 
 # ---------------------------------------------------------------------------
